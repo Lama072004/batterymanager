@@ -1,0 +1,166 @@
+{
+  "id": "ec02_deficit",
+  "edgeCase": "EC02",
+  "title": "Eingesteckt, aber Netto-Entladung → „Entlädt trotz Ladegerät“, keine ETA",
+  "note": "",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 500,
+      "status": 2,
+      "plug": 2,
+      "screen": 1,
+      "current_raw": -400000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 60000,
+      "utc": 1762430460000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 498,
+      "status": 3,
+      "plug": 2,
+      "screen": 1,
+      "current_raw": -400000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 120000,
+      "utc": 1762430520000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 496,
+      "status": 3,
+      "plug": 2,
+      "screen": 1,
+      "current_raw": -400000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 180000,
+      "utc": 1762430580000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 494,
+      "status": 3,
+      "plug": 2,
+      "screen": 1,
+      "current_raw": -400000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 240000,
+      "utc": 1762430640000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 492,
+      "status": 3,
+      "plug": 2,
+      "screen": 1,
+      "current_raw": -400000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": -400,
+        "voltage_mv": 4100,
+        "power_mw": -1640,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": -400,
+        "voltage_mv": 4100,
+        "power_mw": -1640,
+        "temp_dc": 300
+      },
+      {
+        "i": 2,
+        "current_ma": -400,
+        "voltage_mv": 4100,
+        "power_mw": -1640,
+        "temp_dc": 300
+      },
+      {
+        "i": 3,
+        "current_ma": -400,
+        "voltage_mv": 4100,
+        "power_mw": -1640,
+        "temp_dc": 300
+      },
+      {
+        "i": 4,
+        "current_ma": -400,
+        "voltage_mv": 4100,
+        "power_mw": -1640,
+        "temp_dc": 300
+      }
+    ],
+    "events": [
+      {
+        "at": 0,
+        "type": "SESSION_START"
+      },
+      {
+        "at": 2,
+        "type": "DEFICIT_START"
+      }
+    ],
+    "eta": [
+      {
+        "at": 4,
+        "state": "deficit"
+      }
+    ],
+    "profileAfter": null
+  }
+}

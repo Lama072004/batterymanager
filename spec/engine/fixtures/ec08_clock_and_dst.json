@@ -1,0 +1,183 @@
+{
+  "id": "ec08_clock_and_dst",
+  "edgeCase": "EC08",
+  "title": "Sommerzeit und Uhr verstellt → Raten aus elapsed unverändert, Uhrsprung markiert",
+  "note": "Sommerzeit (Index 2) ändert nur tz_min, kein Ereignis. Uhrsprung +1 h (Index 4): keine Rate über die Stelle.",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 600,
+      "status": 3,
+      "plug": 0,
+      "screen": 0,
+      "current_raw": -250000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 600000,
+      "utc": 1762431000000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 598,
+      "status": 3,
+      "plug": 0,
+      "screen": 0,
+      "current_raw": -250000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 1200000,
+      "utc": 1762431600000,
+      "boot": 1,
+      "tz": 120,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 596,
+      "status": 3,
+      "plug": 0,
+      "screen": 0,
+      "current_raw": -250000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 1800000,
+      "utc": 1762432200000,
+      "boot": 1,
+      "tz": 120,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 594,
+      "status": 3,
+      "plug": 0,
+      "screen": 0,
+      "current_raw": -250000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 2400000,
+      "utc": 1762436400000,
+      "boot": 1,
+      "tz": 120,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 592,
+      "status": 3,
+      "plug": 0,
+      "screen": 0,
+      "current_raw": -250000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 3000000,
+      "utc": 1762437000000,
+      "boot": 1,
+      "tz": 120,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 590,
+      "status": 3,
+      "plug": 0,
+      "screen": 0,
+      "current_raw": -250000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": -250,
+        "voltage_mv": 4100,
+        "power_mw": -1025,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": -250,
+        "voltage_mv": 4100,
+        "power_mw": -1025,
+        "temp_dc": 300
+      },
+      {
+        "i": 2,
+        "current_ma": -250,
+        "voltage_mv": 4100,
+        "power_mw": -1025,
+        "temp_dc": 300
+      },
+      {
+        "i": 3,
+        "current_ma": -250,
+        "voltage_mv": 4100,
+        "power_mw": -1025,
+        "temp_dc": 300
+      },
+      {
+        "i": 4,
+        "current_ma": -250,
+        "voltage_mv": 4100,
+        "power_mw": -1025,
+        "temp_dc": 300
+      },
+      {
+        "i": 5,
+        "current_ma": -250,
+        "voltage_mv": 4100,
+        "power_mw": -1025,
+        "temp_dc": 300
+      }
+    ],
+    "events": [
+      {
+        "at": 4,
+        "type": "CLOCK_JUMP",
+        "deltaMs": 3600000
+      }
+    ],
+    "eta": [],
+    "profileAfter": null
+  }
+}

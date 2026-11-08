@@ -1,0 +1,81 @@
+{
+  "id": "p04_dual_cell",
+  "edgeCase": null,
+  "title": "Dual-Cell: Zellspannung zum Pack-Strom → Leistung ×2",
+  "note": "",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 2,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 400,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 2000000,
+      "voltage_raw": 4300,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 60000,
+      "utc": 1762430460000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 402,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 2000000,
+      "voltage_raw": 4310,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": 2000,
+        "voltage_mv": 4300,
+        "power_mw": 17200,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": 2000,
+        "voltage_mv": 4310,
+        "power_mw": 17240,
+        "temp_dc": 300
+      }
+    ],
+    "events": [],
+    "eta": [],
+    "profileAfter": {
+      "i_to_ma": 0.001,
+      "sign": 1,
+      "cells": 2
+    }
+  }
+}

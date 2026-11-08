@@ -1,0 +1,33 @@
+name: batterymanager
+description: "Minimalistischer, stromsparender Akku-Monitor für Android: Live-Lade-Benachrichtigung mit Watt und Restzeit, Verlauf und Verbrauch."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Liest die SQLite-Datei des Dienstes read-only (nutzt auf Android die Framework-SQLite).
+  sqflite: ^2.4.2
+  # Material You (Systemfarben ab Android 12).
+  dynamic_color: ">=1.7.0 <1.9.0"
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  # Brücke Dart <-> Kotlin (Phase 1).
+  pigeon: ^26.0.0
+  # Tests der SQL-Abfragen aus spec/db/q auf dem Rechner.
+  sqflite_common_ffi: ^2.3.6
+
+flutter:
+  uses-material-design: true
+
+  # Schema und Abfragen sind die einzige Schemaquelle für Dienst und UI.
+  assets:
+    - spec/db/
+    - spec/db/q/

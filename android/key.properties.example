@@ -1,0 +1,8 @@
+# Vorlage für die Release-Signatur. Kopieren nach android/key.properties (wird NICHT eingecheckt)
+# und Werte eintragen. Den Keystore einmalig erzeugen mit:
+#   keytool -genkey -v -keystore batterymanager-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias batterymanager
+# Den Keystore sicher aufbewahren: Ohne ihn lassen sich keine Updates mehr installieren.
+storeFile=../batterymanager-release.jks
+storePassword=
+keyAlias=batterymanager
+keyPassword=

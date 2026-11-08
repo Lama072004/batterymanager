@@ -1,0 +1,102 @@
+{
+  "id": "p05_implausible_values",
+  "edgeCase": null,
+  "title": "Unplausible Rohwerte → n/v statt falscher Zahlen",
+  "note": "99 A, 0 V, 90 °C und −25 °C sind unplausibel; fehlender Strom bleibt n/v.",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 400,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 99000000,
+      "voltage_raw": 4200,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 60000,
+      "utc": 1762430460000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 401,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1000000,
+      "voltage_raw": 0,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 900,
+      "q": 0
+    },
+    {
+      "t": 120000,
+      "utc": 1762430520000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 402,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": null,
+      "voltage_raw": 4200,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": -250,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": null,
+        "voltage_mv": 4200,
+        "power_mw": null,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": 1000,
+        "voltage_mv": null,
+        "power_mw": null,
+        "temp_dc": null
+      },
+      {
+        "i": 2,
+        "current_ma": null,
+        "voltage_mv": 4200,
+        "power_mw": null,
+        "temp_dc": null
+      }
+    ],
+    "events": [],
+    "eta": [],
+    "profileAfter": null
+  }
+}

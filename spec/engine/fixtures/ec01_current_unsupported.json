@@ -1,0 +1,190 @@
+{
+  "id": "ec01_current_unsupported",
+  "edgeCase": "EC01",
+  "title": "CURRENT_NOW dauerhaft 0/MIN → W und mA n/v, ETA nur aus %-Steigung",
+  "note": "Profil hat bereits gelernt: Strom nicht unterstützt (i_to_ma = 0).",
+  "profile": {
+    "i_to_ma": 0,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 400,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 0,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 60000,
+      "utc": 1762430460000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 410,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 0,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 120000,
+      "utc": 1762430520000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 420,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 0,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 180000,
+      "utc": 1762430580000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 430,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 0,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 240000,
+      "utc": 1762430640000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 440,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 0,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 300000,
+      "utc": 1762430700000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 450,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 0,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": null,
+        "voltage_mv": 4100,
+        "power_mw": null,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": null,
+        "voltage_mv": 4100,
+        "power_mw": null,
+        "temp_dc": 300
+      },
+      {
+        "i": 2,
+        "current_ma": null,
+        "voltage_mv": 4100,
+        "power_mw": null,
+        "temp_dc": 300
+      },
+      {
+        "i": 3,
+        "current_ma": null,
+        "voltage_mv": 4100,
+        "power_mw": null,
+        "temp_dc": 300
+      },
+      {
+        "i": 4,
+        "current_ma": null,
+        "voltage_mv": 4100,
+        "power_mw": null,
+        "temp_dc": 300
+      },
+      {
+        "i": 5,
+        "current_ma": null,
+        "voltage_mv": 4100,
+        "power_mw": null,
+        "temp_dc": 300
+      }
+    ],
+    "events": [
+      {
+        "at": 0,
+        "type": "SESSION_START"
+      }
+    ],
+    "eta": [
+      {
+        "at": 5,
+        "state": "approx",
+        "estimated": true
+      }
+    ],
+    "profileAfter": {
+      "i_to_ma": 0
+    }
+  }
+}

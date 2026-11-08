@@ -1,0 +1,106 @@
+{
+  "id": "p01_microamps_default",
+  "edgeCase": null,
+  "title": "Standardgerät: CURRENT_NOW in µA, positiv beim Laden",
+  "note": "",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 300,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1500000,
+      "voltage_raw": 4200,
+      "power_raw": null,
+      "counter_raw": 1500000,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 600000,
+      "utc": 1762431000000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 325,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1500000,
+      "voltage_raw": 4210,
+      "power_raw": null,
+      "counter_raw": 1750000,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 1200000,
+      "utc": 1762431600000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 320,
+      "status": 3,
+      "plug": 0,
+      "screen": 1,
+      "current_raw": -350000,
+      "voltage_raw": 4050,
+      "power_raw": null,
+      "counter_raw": 1691667,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": 1500,
+        "voltage_mv": 4200,
+        "power_mw": 6300,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": 1500,
+        "voltage_mv": 4210,
+        "power_mw": 6315,
+        "temp_dc": 300
+      },
+      {
+        "i": 2,
+        "current_ma": -350,
+        "voltage_mv": 4050,
+        "power_mw": -1418,
+        "temp_dc": 300
+      }
+    ],
+    "events": [],
+    "eta": [],
+    "profileAfter": {
+      "i_to_ma": 0.001,
+      "sign": 1,
+      "cells": 1
+    }
+  }
+}

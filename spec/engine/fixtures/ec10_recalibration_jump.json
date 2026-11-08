@@ -1,0 +1,133 @@
+{
+  "id": "ec10_recalibration_jump",
+  "edgeCase": "EC10",
+  "title": "Hersteller-Rekalibrierung (Sprung) → Segmentbruch, keine Rate darüber",
+  "note": "8 % in 30 s > 2 %/min beim Entladen.",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 600,
+      "status": 3,
+      "plug": 0,
+      "screen": 1,
+      "current_raw": -300000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 600000,
+      "utc": 1762431000000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 598,
+      "status": 3,
+      "plug": 0,
+      "screen": 1,
+      "current_raw": -300000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 630000,
+      "utc": 1762431030000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 520,
+      "status": 3,
+      "plug": 0,
+      "screen": 1,
+      "current_raw": -300000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 1200000,
+      "utc": 1762431600000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 518,
+      "status": 3,
+      "plug": 0,
+      "screen": 1,
+      "current_raw": -300000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": -300,
+        "voltage_mv": 4100,
+        "power_mw": -1230,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": -300,
+        "voltage_mv": 4100,
+        "power_mw": -1230,
+        "temp_dc": 300
+      },
+      {
+        "i": 2,
+        "current_ma": -300,
+        "voltage_mv": 4100,
+        "power_mw": -1230,
+        "temp_dc": 300
+      },
+      {
+        "i": 3,
+        "current_ma": -300,
+        "voltage_mv": 4100,
+        "power_mw": -1230,
+        "temp_dc": 300
+      }
+    ],
+    "events": [
+      {
+        "at": 2,
+        "type": "SEGMENT_BREAK",
+        "reason": "jump"
+      }
+    ],
+    "eta": [],
+    "profileAfter": null
+  }
+}

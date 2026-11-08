@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Seed-Farbe (design.md): Fallback ohne Material You. -->
+    <color name="notification_accent">#4A6FA5</color>
+    <!-- Adaptives App-Icon: Hintergrund Seed Ton 90, Glyphe Ton 30. -->
+    <color name="ic_launcher_background">#D7E3FF</color>
+    <color name="ic_launcher_glyph">#1F3B68</color>
+</resources>

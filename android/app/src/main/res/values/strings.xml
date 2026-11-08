@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Batterymanager</string>
+
+    <string name="channel_monitor">Hintergrunddienst</string>
+    <string name="channel_monitor_desc">Stumme Dauer-Benachrichtigung, solange der Batterymanager im Modus „Immer aktiv“ bereit ist.</string>
+    <string name="channel_charging">Laden</string>
+    <string name="channel_charging_desc">Live-Info beim Laden: Leistung in Watt und Restzeit. Erscheint einmal beim Einstecken, danach still.</string>
+    <string name="channel_target_alarm">Ladeziel-Alarm</string>
+    <string name="channel_target_alarm_desc">Ton und Vibration, wenn das eingestellte Ladeziel erreicht ist.</string>
+    <string name="channel_heat">Hitzewarnung</string>
+    <string name="channel_heat_desc">Warnt, wenn der Akku zu warm wird.</string>
+    <string name="channel_status">Status</string>
+    <string name="channel_status_desc">Hinweise, wenn der Dienst blockiert ist oder eine Berechtigung fehlt.</string>
+
+    <string name="spike_notification_title">Mess-Spike läuft</string>
+    <string name="spike_notification_text">Phase 0: Rohwerte werden aufgezeichnet.</string>
+</resources>

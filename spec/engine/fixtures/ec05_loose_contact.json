@@ -1,0 +1,157 @@
+{
+  "id": "ec05_loose_contact",
+  "edgeCase": "EC05",
+  "title": "Wackelkontakt < 2 min → eine Sitzung, kein neues Popup",
+  "note": "Abgesteckt für 60 s (Index 2..3): keine SESSION_END, kein zweites SESSION_START.",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 300,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1500000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 60000,
+      "utc": 1762430460000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 302,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1500000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 80000,
+      "utc": 1762430480000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 302,
+      "status": 3,
+      "plug": 0,
+      "screen": 1,
+      "current_raw": -300000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 140000,
+      "utc": 1762430540000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 302,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1500000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 180000,
+      "utc": 1762430580000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 305,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1500000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": 1500,
+        "voltage_mv": 4100,
+        "power_mw": 6150,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": 1500,
+        "voltage_mv": 4100,
+        "power_mw": 6150,
+        "temp_dc": 300
+      },
+      {
+        "i": 2,
+        "current_ma": -300,
+        "voltage_mv": 4100,
+        "power_mw": -1230,
+        "temp_dc": 300
+      },
+      {
+        "i": 3,
+        "current_ma": 1500,
+        "voltage_mv": 4100,
+        "power_mw": 6150,
+        "temp_dc": 300
+      },
+      {
+        "i": 4,
+        "current_ma": 1500,
+        "voltage_mv": 4100,
+        "power_mw": 6150,
+        "temp_dc": 300
+      }
+    ],
+    "events": [
+      {
+        "at": 0,
+        "type": "SESSION_START"
+      }
+    ],
+    "eta": [],
+    "profileAfter": null
+  }
+}

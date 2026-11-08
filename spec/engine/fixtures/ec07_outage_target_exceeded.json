@@ -1,0 +1,172 @@
+{
+  "id": "ec07_outage_target_exceeded",
+  "edgeCase": "EC07",
+  "title": "Dienst tot, Ziel währenddessen überschritten → einmaliger Hinweis",
+  "note": "Lücke 30 min (> 5 min) bei gleichem Boot: alte Sitzung am letzten Commit schließen.",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 700,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1200000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 60000,
+      "utc": 1762430460000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 705,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1200000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 120000,
+      "utc": 1762430520000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 710,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 1200000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 1920000,
+      "utc": 1762432320000,
+      "boot": 1,
+      "tz": 60,
+      "span": 2,
+      "mode": 0,
+      "level_pm": 860,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 600000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 1980000,
+      "utc": 1762432380000,
+      "boot": 1,
+      "tz": 60,
+      "span": 2,
+      "mode": 0,
+      "level_pm": 862,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 600000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": 1200,
+        "voltage_mv": 4100,
+        "power_mw": 4920,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": 1200,
+        "voltage_mv": 4100,
+        "power_mw": 4920,
+        "temp_dc": 300
+      },
+      {
+        "i": 2,
+        "current_ma": 1200,
+        "voltage_mv": 4100,
+        "power_mw": 4920,
+        "temp_dc": 300
+      },
+      {
+        "i": 3,
+        "current_ma": 600,
+        "voltage_mv": 4100,
+        "power_mw": 2460,
+        "temp_dc": 300
+      },
+      {
+        "i": 4,
+        "current_ma": 600,
+        "voltage_mv": 4100,
+        "power_mw": 2460,
+        "temp_dc": 300
+      }
+    ],
+    "events": [
+      {
+        "at": 0,
+        "type": "SESSION_START"
+      },
+      {
+        "at": 3,
+        "type": "SESSION_END",
+        "reason": "kill"
+      },
+      {
+        "at": 3,
+        "type": "SESSION_START",
+        "startKnown": false
+      },
+      {
+        "at": 3,
+        "type": "TARGET_EXCEEDED_DURING_OUTAGE",
+        "levelPct": 86
+      }
+    ],
+    "eta": [],
+    "profileAfter": null
+  }
+}

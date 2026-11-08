@@ -1,0 +1,102 @@
+{
+  "phase": "planning",
+  "complete": false,
+  "idea": "Batterymanager (nur Android): Live-Lade-Benachrichtigung mit Watt + Restzeit, 3 Graphen, ≤ 5 mAh/Tag, Material You",
+  "themeName": "Council",
+  "sessionId": "batterymanager-app-20261106-1815",
+  "date": "2026-11-06",
+  "mode": "standard",
+  "profile": "balanced",
+  "backend": "sequential",
+  "roster": [
+    {
+      "name": "Pathfinder",
+      "color": "#ff7f6e",
+      "score": 10,
+      "rationale": "Native Akku-APIs auf Android/Windows/Linux, Android-Hintergrundregeln, Notifications",
+      "skills": [
+        "device-integration",
+        "platform-audit"
+      ],
+      "status": "active"
+    },
+    {
+      "name": "Tuner",
+      "color": "#fbbf24",
+      "score": 10,
+      "rationale": "Minimaler Eigenverbrauch ist Kernanforderung: Sampling, Wakeups, Flutter-Engine im Hintergrund",
+      "skills": [
+        "performance-audit"
+      ],
+      "status": "active"
+    },
+    {
+      "name": "Architect",
+      "color": "#60a5fa",
+      "score": 9,
+      "rationale": "Native Kern vs. Flutter-UI, Platform Channels, Zeitreihen-Datenmodell",
+      "skills": [
+        "codebase-context",
+        "schema-design"
+      ],
+      "status": "active"
+    },
+    {
+      "name": "Artisan",
+      "color": "#f472b6",
+      "score": 9,
+      "rationale": "Minimalistisches Design-System, Material You, Dark/Light, Graphen-Stil",
+      "skills": [
+        "design-system-architecture"
+      ],
+      "status": "active"
+    },
+    {
+      "name": "Advocate",
+      "color": "#4ade80",
+      "score": 8,
+      "rationale": "Lade-Benachrichtigung, Einstellung Dauerdienst ja/nein, Lesbarkeit der Graphen",
+      "skills": [
+        "interaction-design"
+      ],
+      "status": "active"
+    },
+    {
+      "name": "Skeptic",
+      "color": "#f87171",
+      "score": 6,
+      "rationale": "OEM-Akku-Killer, falsche Strom-Vorzeichen/Einheiten, FGS-Restriktionen Android 14/15",
+      "skills": [
+        "failure-mode-analysis",
+        "edge-case-enumeration"
+      ],
+      "status": "active"
+    }
+  ],
+  "tensionPairs": [
+    {
+      "a": "Architect",
+      "b": "Pathfinder",
+      "tension": "Datengrenze: Binär-Journal + Dart-eigene DB vs. gemeinsame SQLite (WAL) mit nativem Einzelschreiber"
+    },
+    {
+      "a": "Tuner",
+      "b": "Skeptic",
+      "tension": "Desktop-Host (C++-Helper vs. Dart-Tray vs. ohne Tray v1), Phasing, Energiebudget 0,1 % vs. 1 %/Tag"
+    },
+    {
+      "a": "Pathfinder",
+      "b": "Skeptic",
+      "tension": "Was Modus (b) ohne Dauerdienst wirklich liefert: Job-Latenz, FGS nur beim Laden, Graph 3"
+    }
+  ],
+  "costEstimate": "~150-220K Tokens (6 Agenten, balanced, sequentiell)",
+  "phases": [
+    "interview",
+    "assembly",
+    "deliberation",
+    "verdict",
+    "planning",
+    "verification"
+  ]
+}

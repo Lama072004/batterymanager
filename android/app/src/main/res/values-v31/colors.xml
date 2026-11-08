@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material You: Systemakzent ab Android 12. -->
+    <color name="notification_accent">@android:color/system_accent1_600</color>
+</resources>

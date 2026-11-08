@@ -1,0 +1,136 @@
+{
+  "id": "ec04_plug_above_target",
+  "edgeCase": "EC04",
+  "title": "Einstecken bei ≥ Ziel → einmalig „Ziel bereits erreicht“, kein Alarm",
+  "note": "",
+  "profile": {
+    "i_to_ma": 0.001,
+    "v_to_mv": 1,
+    "p_to_mw": 1,
+    "sign": 1,
+    "cells": 1,
+    "p_src": 0
+  },
+  "settings": {
+    "targetPct": 80,
+    "alarm": true
+  },
+  "samples": [
+    {
+      "t": 0,
+      "utc": 1762430400000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 850,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 900000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 60000,
+      "utc": 1762430460000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 852,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 900000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 120000,
+      "utc": 1762430520000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 854,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 900000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    },
+    {
+      "t": 180000,
+      "utc": 1762430580000,
+      "boot": 1,
+      "tz": 60,
+      "span": 1,
+      "mode": 0,
+      "level_pm": 856,
+      "status": 2,
+      "plug": 1,
+      "screen": 1,
+      "current_raw": 900000,
+      "voltage_raw": 4100,
+      "power_raw": null,
+      "counter_raw": null,
+      "temp_dc": 300,
+      "q": 0
+    }
+  ],
+  "expect": {
+    "normalized": [
+      {
+        "i": 0,
+        "current_ma": 900,
+        "voltage_mv": 4100,
+        "power_mw": 3690,
+        "temp_dc": 300
+      },
+      {
+        "i": 1,
+        "current_ma": 900,
+        "voltage_mv": 4100,
+        "power_mw": 3690,
+        "temp_dc": 300
+      },
+      {
+        "i": 2,
+        "current_ma": 900,
+        "voltage_mv": 4100,
+        "power_mw": 3690,
+        "temp_dc": 300
+      },
+      {
+        "i": 3,
+        "current_ma": 900,
+        "voltage_mv": 4100,
+        "power_mw": 3690,
+        "temp_dc": 300
+      }
+    ],
+    "events": [
+      {
+        "at": 0,
+        "type": "SESSION_START"
+      },
+      {
+        "at": 0,
+        "type": "TARGET_ALREADY_REACHED"
+      }
+    ],
+    "eta": [],
+    "profileAfter": null
+  }
+}

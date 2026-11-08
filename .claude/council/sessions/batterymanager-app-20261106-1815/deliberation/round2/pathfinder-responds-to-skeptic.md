@@ -1,0 +1,23 @@
+## Pathfinder Response to Skeptic — Tension C: Was liefert Modus (b) wirklich?
+
+**Position von Skeptic (Round 1):** Modus (b) ist schwächer als angenommen. `POWER_CONNECTED` geht nicht im Manifest, der Job-Start ist nicht garantiert (Standby-Buckets), ein FGS aus dem Job ist ab Android 12 ohne Akku-Optimierungs-Ausnahme verboten, und `SCREEN_ON/OFF` kommt nur dynamisch an. Graph 3 sei daher nicht erhebbar, (b) nur „best effort“.
+
+**Haltung:** Modify. Skeptics Fakten stimmen und korrigieren zwei Punkte meiner Round 1. (b) wird die Drittoption des Conductors: Ein Job zündet einen FGS, der nur während des Ladens läuft.
+
+**Begründung:**
+- **Latenz: andere Ursache, schlechteres Ergebnis.** Die Buckets bremsen beim Laden kaum. Der QuotaController ist dann quota-frei (außer RESTRICTED), Doze ist aus, und mit der Ausnahme steht die App im Bucket EXEMPTED. Der Engpass ist der Constraint selbst. `requiresCharging` folgt dem *System*-Ladezustand `ACTION_CHARGING`, den AOSP zusätzlich an „battery not low“ koppelt, und nicht dem Einstecken. Unter 90 % meldet BatteryStats den Zustand erst nach dem ersten Prozentanstieg plus `battery_charged_delay_ms` (Default 15 min). Außerdem gilt laut Javadoc ein Gerät, das trotz Kabel entlädt (USB unter Last), nicht als ladend. Meine Angabe „Sekunden bis wenige Minuten“ war falsch, realistisch sind 15–20 min. Die Ausnahme ändert daran nichts. Ein Spike misst die Latenz vom Einstecken bis zum Job auf den Zielgeräten.
+- **FGS aus dem Job:** Ohne Ausnahme verboten, mit ihr erlaubt. „User turns off battery optimizations“ ist eine dokumentierte Ausnahme und gilt für die ganze App, also auch im JobService. Beim Sideload gibt es dafür kein Policy-Problem. Android 15 verschärft nur `BOOT_COMPLETED`-Starts bestimmter FGS-Typen. `specialUse` ist davon nicht betroffen und hat keinen Timeout.
+- **Ziel-Alarm:** Meinen Fallback über `setWindow` streiche ich, denn ab API 31 wird das Fenster auf mindestens 10 min gedehnt. Im Lade-FGS hängt der Alarm wie in (a) am Übergang von `EXTRA_LEVEL`.
+- **Bildschirm an/aus ohne Prozess:** `SCREEN_ON/OFF` kommt nur über `registerReceiver` an. Ab Android 14 werden Broadcasts an gecachte Prozesse nur gepuffert zugestellt. UsageStats (`SCREEN_INTERACTIVE`) bräuchte Usage Access, was Entscheidung 4 ausschließt. Ohne laufenden Prozess gibt es also keine Aufteilung nach Bildschirm an/aus.
+- **Ohne Ausnahme:** Meinen Job-Tick-Pfad streiche ich. Er wäre eine dritte Pipeline mit den schwächsten Garantien und rutscht bei seltener Nutzung nach RESTRICTED.
+- **Ehrlich:** (b) spart gegenüber (a) nur wenige mAh pro Tag. Der Gewinn ist der Wegfall der Dauer-Benachrichtigung, und so steht es in den Einstellungen.
+
+**Spezifikation:**
+
+| Variante | Trigger | Realistische Latenz | Update-Takt | Benachrichtigung | Was in Graph 1/2/3 fehlt | Berechtigungen |
+|---|---|---|---|---|---|---|
+| (a) Referenz | dynamischer Receiver `BATTERY_CHANGED` im Dauer-FGS | < 1 s | Laden 5–10 s, Entladen ereignisgetrieben | stumme Dauer-Benachrichtigung; live beim Laden; Ziel exakt | nichts (außer bei OEM-Kill) | `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE(_SPECIAL_USE)`, `RECEIVE_BOOT_COMPLETED`; Ausnahme empfohlen |
+| **(b) „Nur beim Laden“** | persistenter Job `requiresCharging` → `startForegroundService` (`specialUse`, `FOREGROUND_SERVICE_IMMEDIATE`) → `jobFinished`. Der FGS endet bei `plugged=0` mit Snapshot und plant den Job neu. Ein Watchdog-Job (+15 min) prüft, ob er noch lebt. Wird die App beim Laden geöffnet, startet der FGS sofort | unter 90 %: erster %-Schritt + ~15 min; ab 90 %: Sekunden; bei Akku niedrig erst ab „not low“; bei Ladelimit, Last oder OEM-Sperre ggf. nie | ab FGS-Start wie (a) | live wie (a), aber verspätet; keine Dauer-Benachrichtigung; Ziel exakt, sonst sofort „Ziel überschritten (x %)“; Hitzewarnung nur beim Laden | G1: keine Entladekurve, nur gestrichelt verbundene Punkte bei Abstecken und App-Öffnen. G2: die ersten ~15–20 min fehlen; echter Start und Start-% sind unbekannt (markiert). G3: keine Aufteilung an/aus; Ø %/h nur zwischen Abstecken und letztem App-Öffnen, sonst „kein Wert“ | wie (a) + `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` **mit Nutzerfreigabe (Pflicht)**; `RECEIVE_BOOT_COMPLETED` für `setPersisted` |
+| (b) ohne Ausnahme | nur App-Öffnen (startet den Lade-FGS, falls eingesteckt) | – | wie (a) bis zum Abstecken | nur nach manuellem Öffnen; Banner „Ausnahme fehlt“ | alles außer Ladevorgängen, bei denen die App geöffnet war | `POST_NOTIFICATIONS` |
+
+**Nicht in (b):** `WAKE_LOCK`, `SCHEDULE_EXACT_ALARM`, Usage Access, Entlade-Job. `ForegroundServiceStartNotAllowedException` → Banner. Die App zeigt die gemessene Latenz der letzten Ladevorgänge.
