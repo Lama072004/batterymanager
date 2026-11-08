@@ -13,6 +13,8 @@ class Engine(
     var settings: Settings = Settings(),
     /** Gelernte Ladekurve: (plug, klass, pct) → Sekunden je Prozentpunkt. */
     var chargeProfile: Map<Triple<Int, Int, Int>, Double> = emptyMap(),
+    /** Geschätzte Akkukapazität (mAh, aus CHARGE_COUNTER), für die Sofort-Restzeit vor dem ersten %-Schritt. */
+    var capacityMah: Double? = null,
 ) {
     class Session(
         val startT: Long,
@@ -254,7 +256,13 @@ class Engine(
         if (s.deficit) return Eta(EtaState.DEFICIT)
         if (r.t - s.startT < WARMUP_MS && s.steps == 0) return Eta(EtaState.COMPUTING)
 
-        val live = s.liveSecPerPct
+        // Vor dem ersten beobachteten %-Schritt: Rate aus Ladestrom und Kapazität schätzen (nur „ca.“).
+        val fromCurrent = run {
+            val c = profile.currentMa(r.currentRaw) ?: return@run null
+            val cap = capacityMah ?: return@run null
+            if (c < 100) null else cap * 0.01 / c * 3600.0
+        }
+        val live = s.liveSecPerPct ?: fromCurrent
         val pct = r.pct
         fun rate(p: Int): Double? {
             val learned = chargeProfile[Triple(s.plug, s.klass, p)]
@@ -285,6 +293,7 @@ class Engine(
             s.steps >= 3 || coverage >= 0.8 -> 0.5
             else -> 0.2
         }
+        if (s.liveSecPerPct == null && fromCurrent != null) conf = max(conf, 0.45)
         val estimated = !profile.currentSupported
         if (estimated) conf = min(conf, 0.5)
         val state = when { conf >= 0.7 -> EtaState.OK; conf >= 0.4 -> EtaState.APPROX; else -> EtaState.NONE }

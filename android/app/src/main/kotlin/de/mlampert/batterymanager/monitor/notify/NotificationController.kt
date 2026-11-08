@@ -32,6 +32,7 @@ class NotificationController(private val ctx: Context) {
     private var lastPowerMw: Long? = null
     private var lastPct: Int? = null
     private var lastEtaS: Long? = null
+    private var lastId = 0
     var updates = 0L
         private set
 
@@ -51,15 +52,22 @@ class NotificationController(private val ctx: Context) {
             if (!dW && !dPct && !dEta) return
         }
         val n = build(kind, live, alert)
+        // Ruhezustand = ID 1 (stumm). Laden/Alarm/Hitze/Zusammenfassung = ID 2: Beim Einstecken entsteht damit
+        // eine NEUE Benachrichtigung auf dem HIGH-Kanal – nur so zeigt Android das Heads-up-Banner
+        // (stumme Updates einer bestehenden Benachrichtigung poppen nicht auf). Es bleibt immer genau eine sichtbar.
+        val id = if (kind == Kind.IDLE) NotificationChannels.ID_MONITOR else NotificationChannels.ID_CHARGING
+        val other = if (id == NotificationChannels.ID_MONITOR) NotificationChannels.ID_CHARGING else NotificationChannels.ID_MONITOR
         if (service != null) {
             if (Build.VERSION.SDK_INT >= 34) {
-                service.startForeground(NotificationChannels.ID_MONITOR, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                service.startForeground(id, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             } else {
-                service.startForeground(NotificationChannels.ID_MONITOR, n)
+                service.startForeground(id, n)
             }
         } else {
-            nm.notify(NotificationChannels.ID_MONITOR, n)
+            nm.notify(id, n)
         }
+        if (id != lastId) nm.cancel(other)
+        lastId = id
         lastKey = key
         lastPostElapsed = now
         lastPowerMw = live.powerMw

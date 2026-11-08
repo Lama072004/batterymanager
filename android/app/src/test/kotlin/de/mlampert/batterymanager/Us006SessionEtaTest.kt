@@ -58,6 +58,22 @@ class Us006SessionEtaTest {
         assertEquals(EtaState.COMPUTING, e.eta().state)
     }
 
+    // Sofort-Restzeit: vor dem ersten %-Schritt aus Ladestrom und Kapazität (5.000 mAh, 2 A → 90 s je %).
+    @Test
+    fun etaFromCurrentBeforeFirstStep() {
+        val e = Engine(Profile(), Settings(targetPct = 80), capacityMah = 5000.0)
+        e.onReading(Reading(0, 0, 1, 60, 1, 500, 2, 1, 1, 2_000_000, 4200, null, null, 300))
+        e.onReading(Reading(100_000, 100_000, 1, 60, 1, 500, 2, 1, 1, 2_000_000, 4200, null, null, 300))
+        val eta = e.eta()
+        assertEquals(EtaState.APPROX, eta.state)
+        assertEquals(30 * 90L, eta.targetS)
+        // ohne Kapazität: keine Schätzung
+        val e2 = Engine(Profile(), Settings(targetPct = 80))
+        e2.onReading(Reading(0, 0, 1, 60, 1, 500, 2, 1, 1, 2_000_000, 4200, null, null, 300))
+        e2.onReading(Reading(100_000, 100_000, 1, 60, 1, 500, 2, 1, 1, 2_000_000, 4200, null, null, 300))
+        assertEquals(EtaState.NONE, e2.eta().state)
+    }
+
     // Lernkurve wird mit gelerntem Profil zu „ok“ und rechnet die CV-Phase langsamer.
     @Test
     fun etaWithLearnedProfile() {

@@ -126,14 +126,13 @@ class _LevelPainter extends CustomPainter {
       for (var i = 0; i < list.length; i++) {
         final a = list[i];
         final ax = x(a.bucketTs + bucket ~/ 2), ay = y(a.levelPct);
-        final isolated = (i == 0 || list[i].bucketTs - list[i - 1].bucketTs > 3 * bucket) &&
-            (i == list.length - 1 || list[i + 1].bucketTs - a.bucketTs > 3 * bucket);
-        if (isolated) {
+        // Innerhalb eines Spans ist die Abdeckung lückenlos: Punkte immer verbinden, auch wenn
+        // beim Entladen nur alle ~10 min ein Messpunkt kommt. Lücken entstehen nur zwischen Spans.
+        if (list.length == 1) {
           canvas.drawCircle(Offset(ax, ay), 3, Paint()..color = a.plugged ? bc.charge : cs.primary);
         }
         if (i + 1 >= list.length) continue;
         final b = list[i + 1];
-        if (b.bucketTs - a.bucketTs > 3 * bucket) continue;
         final bx = x(b.bucketTs + bucket ~/ 2), by = y(b.levelPct);
         final charging = a.plugged && b.plugged;
         if (charging) {

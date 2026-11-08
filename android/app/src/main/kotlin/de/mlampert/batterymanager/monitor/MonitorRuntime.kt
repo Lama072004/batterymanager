@@ -126,6 +126,13 @@ object MonitorRuntime {
         if (profile.source == 0) q = q or 32
         pending += r to q
 
+        // Kapazität aus CHARGE_COUNTER (µAh) und Ladestand – nur plausible Werte (1.500–8.000 mAh).
+        val counter = r.counterRaw
+        if (counter != null && r.levelPm >= 200) {
+            val cap = counter / 1000.0 / (r.levelPm / 1000.0)
+            if (cap in 1_500.0..8_000.0) engine.capacityMah = cap
+        }
+
         detector.observe(r, profile)?.let { p ->
             if (profile.source != 2) {
                 profile = p
