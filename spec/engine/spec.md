@@ -71,8 +71,8 @@ Verbindliche Spezifikation der Hintergrund-Engine im Prozess `:monitor`. Sie wir
 | Wiederaufnahme nach Dienststart | gleicher Boot **und** Lücke < 5 min **und** eingesteckt → `SESSION_RESUME`; sonst alte Sitzung am letzten Commit schließen (`SESSION_END`, reason `kill`/`reboot`) und neue mit `startKnown = false` |
 | Moduswechsel beim Laden | `SESSION_RESUME`, nie eine zweite Sitzung |
 | Ladepause | eingesteckt, \|I\| < 50 mA **und** Ladestand seit ≥ 10 min konstant → `PAUSE_START` |
-| Netto-Entladung | eingesteckt **und** Ladestand fällt (≥ 2 Schritte) bzw. I < 0 über ≥ 2 Samples → `DEFICIT_START` |
-| Leistungsklasse nach Warmup | 0 unbekannt (ohne Strom), 1 ≤ 7,5 W, 2 ≤ 18 W, 3 > 18 W |
+| Netto-Entladung | eingesteckt **und** Ladestand fällt (≥ 2 Schritte) bzw. I < 0 in ≥ 3 aufeinanderfolgenden Samples → `DEFICIT_START` |
+| Leistungsklasse | vorläufig ab dem ersten Messwert (laufendes Mittel), nach 90 s fest: 0 unbekannt (ohne Strom), 1 ≤ 7,5 W, 2 ≤ 18 W, 3 > 18 W |
 | Segmentbruch | \|Δlevel\| > 6 %/min beim Laden bzw. > 2 %/min beim Entladen → `SEGMENT_BREAK` (reason `jump`), keine Rate über diese Stelle |
 | Uhrsprung | \|ΔUTC − Δelapsed\| > 120 s → `CLOCK_JUMP`, keine Rate über diese Stelle. Sommerzeit ändert nur `tz_min` und ist kein Ereignis. |
 
@@ -86,7 +86,7 @@ Verbindliche Spezifikation der Hintergrund-Engine im Prozess `:monitor`. Sie wir
 
 ## 7. Restzeit (Eta)
 
-1. **Warmup (90 s):** Zustand `computing` („wird berechnet“).
+1. **Sofort-Schätzung:** Ab dem ersten Messwert wird gerechnet. Watt werden sofort angezeigt. Gibt es noch keinen %-Schritt, wird die Rate aus Ladestrom und Kapazität geschätzt (Kapazität aus CHARGE_COUNTER, ersatzweise die Herstellerangabe). Nur wenn keine Ratenquelle existiert, gilt in den ersten 90 s `computing` („wird berechnet“), danach `none`. In der ersten Minute einer Sitzung wird alle 2 s gemessen und die Benachrichtigung höchstens alle 3 s aktualisiert.
 2. **Vorrang:** Zustand `pause` oder `deficit` ersetzt jede Zeitangabe.
 3. **Live-Rate:** EWMA der Sekunden je Prozentpunkt (α = 0,3). Der Strom dient nur der Interpolation innerhalb eines Prozentpunkts und der Erkennung von CC → CV.
 4. **Restzeit** = Σ_{p = level..target−1} `sec_per_pct[plug, klass, p]` · k, mit k = EWMA(Live-Rate / Profil-Rate), begrenzt auf 0,5…2.

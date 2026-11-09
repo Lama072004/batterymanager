@@ -41,11 +41,13 @@ class NotificationController(private val ctx: Context) {
      * @param force Zustandswechsel → Drosselung umgehen.
      */
     fun post(service: Service?, kind: Kind, live: LiveState, screenOn: Boolean, alert: Boolean, force: Boolean) {
-        val key = "$kind/${live.etaState}/${live.charging}"
+        val key = "$kind/${live.etaState}/${live.charging}/${live.liveChip}"
         val now = SystemClock.elapsedRealtime()
         if (!force && key == lastKey) {
             if (!screenOn) return
-            if (now - lastPostElapsed < MIN_INTERVAL_MS) return
+            // In der ersten Minute einer Ladesitzung schneller aktualisieren (Watt/Restzeit stabilisieren sich).
+            val young = live.sessionStartUtc != null && System.currentTimeMillis() - live.sessionStartUtc < 60_000
+            if (now - lastPostElapsed < if (young) FAST_INTERVAL_MS else MIN_INTERVAL_MS) return
             val dW = abs((live.powerMw ?: 0) - (lastPowerMw ?: 0)) >= 500
             val dPct = live.pct != lastPct
             val dEta = abs((live.etaTargetS ?: live.etaFullS ?: 0) - (lastEtaS ?: 0)) >= 60
@@ -122,7 +124,7 @@ class NotificationController(private val ctx: Context) {
             if (live.alarm && !live.alarmMuted && kind != Kind.TARGET) {
                 b.addAction(action(R.drawable.ic_stat_battery, "Alarm aus", NotificationActionReceiver.ACTION_MUTE, 2))
             }
-            if (Build.VERSION.SDK_INT >= 36) applyLiveUpdate(b, live)
+            if (Build.VERSION.SDK_INT >= 36) applyLiveUpdate(b, live, promote = live.liveChip)
         }
         if (kind == Kind.TARGET || kind == Kind.HEAT) {
             b.addAction(action(R.drawable.ic_stat_target, "Verstanden", NotificationActionReceiver.ACTION_ACK, 3))
@@ -130,7 +132,12 @@ class NotificationController(private val ctx: Context) {
         return b.build()
     }
 
-    private fun applyLiveUpdate(b: Notification.Builder, live: LiveState) {
+    /**
+     * Fortschrittsbalken mit Ziel-Markierung (Android 16+). Nur mit [promote] wird die Benachrichtigung als
+     * Live Update hervorgehoben: dann zeigt die Statusleiste dauerhaft einen Chip mit der Watt-Zahl.
+     * Ohne Hervorhebung zeigt die Statusleiste nur das Symbol; Watt/Restzeit stehen in der Benachrichtigung.
+     */
+    private fun applyLiveUpdate(b: Notification.Builder, live: LiveState, promote: Boolean) {
         val accent = ctx.getColor(R.color.notification_accent)
         val style = Notification.ProgressStyle()
             .setProgressSegments(listOf(
@@ -141,6 +148,7 @@ class NotificationController(private val ctx: Context) {
             .setProgress(live.pct)
             .setStyledByProgress(true)
         b.setStyle(style)
+        if (!promote) return
         // Live Update (Android 16): Promotion anfragen (Notification.EXTRA_REQUEST_PROMOTED_ONGOING).
         b.addExtras(android.os.Bundle().apply { putBoolean("android.requestPromotedOngoing", true) })
         live.powerMw?.takeIf { it > 0 }?.let { b.setShortCriticalText(Fmt.watts(it)) }
@@ -152,13 +160,22 @@ class NotificationController(private val ctx: Context) {
         return when (kind) {
             Kind.IDLE -> "Batterymanager ist bereit" to "Lade-Info erscheint beim Einstecken."
             Kind.SUMMARY -> "Ladevorgang beendet" to (live.summary ?: "")
-            Kind.TARGET -> "Ladeziel ${Fmt.pct(live.targetPct)} erreicht" to "Jetzt abstecken, um den Akku zu schonen."
+            Kind.TARGET -> if (live.deviceLimitPct != null && live.targetPct >= live.deviceLimitPct) {
+                "Ladelimit ca. ${Fmt.pct(live.deviceLimitPct)} erreicht" to "Dein Gerät lädt nicht weiter. Du kannst abstecken."
+            } else {
+                "Ladeziel ${Fmt.pct(live.targetPct)} erreicht" to "Jetzt abstecken, um den Akku zu schonen."
+            }
             Kind.HEAT -> "Akku warm: ${live.tempDc?.let { Fmt.tempC(it) } ?: "–"}" + (w?.let { " · $it" } ?: "") to
                 (if (live.charging) etaLine(live) else "Gerät abkühlen lassen.")
             Kind.CHARGING -> when (live.etaState) {
-                EtaState.COMPUTING -> "Lädt · $pct" to "Ladeleistung wird ermittelt …"
+                EtaState.COMPUTING -> (if (w != null && (live.powerMw ?: 0) > 0) "Lädt mit $w · $pct" else "Lädt · $pct") to
+                    (if (w != null) "Restzeit wird berechnet …" else "Ladeleistung wird ermittelt …")
                 EtaState.DEFICIT -> "Eingesteckt, entlädt trotzdem" to "Ladegerät zu schwach" + (w?.let { " ($it)." } ?: ".")
-                EtaState.PAUSE -> "Ladepause · $pct" to "Gerät pausiert das Laden (Limit/adaptiv)."
+                EtaState.PAUSE -> if (live.deviceLimitPct != null && live.pct >= live.deviceLimitPct - 2) {
+                    "Ladelimit erreicht · $pct" to "Dein Gerät hält den Akku bei ca. ${Fmt.pct(live.deviceLimitPct)} (Ladeschutz)."
+                } else {
+                    "Ladepause · $pct" to "Gerät pausiert das Laden (Limit/adaptiv)."
+                }
                 EtaState.FULL -> "Voll geladen" to (live.fullSinceUtc?.let { "Seit ${Fmt.clock(it)} bei 100${Fmt.NNBSP}%" } ?: "100${Fmt.NNBSP}%")
                 else -> {
                     val title = when {
@@ -178,9 +195,10 @@ class NotificationController(private val ctx: Context) {
         val ca = if (live.etaState == EtaState.OK) "" else "ca. "
         val parts = mutableListOf<String>()
         val t = live.etaTargetS
-        if (t != null && t > 0 && live.pct < live.targetPct) parts += "${Fmt.pct(live.targetPct)} in $ca${Fmt.duration(t, step)}"
+        if (t != null && t > 0 && live.pct < live.targetPct && (live.deviceLimitPct == null || live.targetPct < live.deviceLimitPct)) parts += "${Fmt.pct(live.targetPct)} in $ca${Fmt.duration(t, step)}"
         val f = live.etaFullS
-        if (f != null && f > 0) parts += "Voll ca. ${Fmt.clock(System.currentTimeMillis() + f * 1000)}"
+        val fullLabel = if (live.deviceLimitPct != null) "Limit ${Fmt.pct(live.deviceLimitPct)}" else "Voll"
+        if (f != null && f > 0) parts += "$fullLabel ca. ${Fmt.clock(System.currentTimeMillis() + f * 1000)}"
         return if (parts.isEmpty()) "Restzeit wird berechnet …" else parts.joinToString(" · ")
     }
 
@@ -202,5 +220,6 @@ class NotificationController(private val ctx: Context) {
 
     companion object {
         const val MIN_INTERVAL_MS = 10_000L
+        const val FAST_INTERVAL_MS = 3_000L
     }
 }

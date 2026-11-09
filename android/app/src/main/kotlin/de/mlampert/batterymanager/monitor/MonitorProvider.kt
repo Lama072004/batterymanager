@@ -36,6 +36,7 @@ class MonitorProvider : ContentProvider() {
                     heatWarnDc = e.getInt("heatWarnDc", old.heatWarnDc).coerceIn(400, 500),
                     summary = e.getBoolean("summary", old.summary),
                     onboarded = e.getBoolean("onboarded", old.onboarded),
+                    liveChip = e.getBoolean("liveChip", old.liveChip),
                 )
                 rt.putSettings(s)
                 if (s.mode != old.mode) {
@@ -64,6 +65,7 @@ class MonitorProvider : ContentProvider() {
             }
             "flush" -> { rt.flush(); Bundle().apply { putInt("v", 1); putLong("lastSampleId", rt.store.lastSampleId()) } }
             "clearHistory" -> { rt.clearHistory(); stateBundle() }
+            "resetLimit" -> { rt.resetDeviceLimit(); stateBundle() }
             "seedDemo" -> {
                 if (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return null
                 rt.flush()
@@ -82,11 +84,12 @@ class MonitorProvider : ContentProvider() {
         return Bundle().apply {
             putInt("v", 1)
             putInt("targetPct", s.targetPct); putBoolean("alarm", s.alarm); putInt("mode", s.mode)
-            putInt("heatWarnDc", s.heatWarnDc); putBoolean("summary", s.summary); putBoolean("onboarded", s.onboarded)
+            putInt("heatWarnDc", s.heatWarnDc); putBoolean("summary", s.summary); putBoolean("onboarded", s.onboarded); putBoolean("liveChip", s.liveChip)
             putString("dbPath", context!!.getDatabasePath(AndroidSqlDb.DB_NAME).path)
             putDouble("iToMa", p.iToMa); putInt("sign", p.sign); putInt("cells", p.cells)
             putInt("profileSource", p.source); putInt("profileRev", p.rev)
             putLong("lastSampleId", rt.store.lastSampleId())
+            rt.engine.deviceLimitPct?.let { putInt("deviceLimitPct", it) }
             putBoolean("serviceRunning", rt.service != null)
             putLong("cpuMs", rt.cpuMs()); putLong("flushes", rt.flushes); putLong("notifUpdates", rt.notifUpdates())
         }

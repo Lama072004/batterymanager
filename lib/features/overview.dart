@@ -151,9 +151,9 @@ class _Hero extends StatelessWidget {
       icon = Icons.bolt;
       color = bc.charge;
       sub = switch (live.etaState) {
-        'computing' => 'Lädt · Leistung wird ermittelt …',
+        'computing' => w != null && w > 0 ? 'Lädt mit $ca${fmtWatts(w)}' : 'Lädt · Leistung wird ermittelt …',
         'deficit' => 'Eingesteckt, entlädt trotzdem${w != null ? ' (${fmtWatts(w)})' : ''}',
-        'pause' => 'Ladepause',
+        'pause' => live.deviceLimitPct != null && live.pct >= live.deviceLimitPct! - 2 ? 'Ladelimit erreicht' : 'Ladepause',
         'full' => 'Voll geladen',
         _ => w != null && w > 0 ? 'Lädt mit $ca${fmtWatts(w)}' : 'Lädt',
       };
@@ -168,17 +168,25 @@ class _Hero extends StatelessWidget {
     if (live.charging) {
       final step = live.etaState == 'ok' ? 5 : 15;
       final pre = live.etaState == 'ok' ? '' : 'ca. ';
+      final limit = live.deviceLimitPct;
+      final targetBelowLimit = limit == null || live.targetPct < limit;
       if (live.etaState == 'ok' || live.etaState == 'approx') {
-        if (live.etaTargetS != null && live.pct < live.targetPct) {
+        if (live.etaTargetS != null && live.pct < live.targetPct && targetBelowLimit) {
           etaLines.add('${fmtPct(live.targetPct)} in $pre${fmtDuration(live.etaTargetS!, step: step)}');
         }
-        if (live.etaFullS != null && live.pct < 100) etaLines.add('Voll in $pre${fmtDuration(live.etaFullS!, step: step)}');
+        final top = limit ?? 100;
+        if (live.etaFullS != null && live.pct < top) {
+          final label = limit != null ? 'Bis Limit ${fmtPct(limit)}' : 'Voll';
+          etaLines.add('$label in $pre${fmtDuration(live.etaFullS!, step: step)}');
+        }
       } else if (live.etaState == 'computing') {
         etaLines.add('Restzeit wird berechnet …');
       } else if (live.etaState == 'none') {
         etaLines.add('Restzeit: —');
       } else if (live.etaState == 'pause') {
-        etaLines.add('Gerät pausiert das Laden (Limit/adaptiv).');
+        etaLines.add(limit != null && live.pct >= limit - 2
+            ? 'Dein Gerät hält den Akku bei ca. ${fmtPct(limit)} (Ladeschutz).'
+            : 'Gerät pausiert das Laden (Limit/adaptiv).');
       } else if (live.etaState == 'full' && live.fullSinceUtc != null) {
         etaLines.add('Seit ${fmtClockUtc(live.fullSinceUtc!)} bei 100$nnbsp%');
       }
@@ -289,6 +297,7 @@ class _Values extends StatelessWidget {
       if (live.currentMa != null) (fmtMa(live.currentMa!.abs()), live.currentMa! >= 0 ? 'Strom (in den Akku)' : 'Strom (aus dem Akku)'),
       if (live.capacityMah != null) ('ca. ${fmtMah(live.capacityMah!)}', 'Kapazität'),
       if (live.cycleCount != null) ('${live.cycleCount}', 'Ladezyklen'),
+      if (live.deviceLimitPct != null) ('ca. ${fmtPct(live.deviceLimitPct!)}', 'Ladelimit (Gerät)'),
     ];
     if (cells.isEmpty) return const SizedBox.shrink();
     final oneColumn = MediaQuery.textScalerOf(context).scale(10) >= 20;
@@ -406,11 +415,12 @@ class _PowerSection extends StatelessWidget {
     if (s != null) {
       final end = s.endLevelPm;
       final from = s.startKnown ? fmtPct(s.startLevelPm ~/ 10) : 'ab ${fmtPct(s.startLevelPm ~/ 10)}';
-      final avg = s.avgW;
+      final avg = s.activeAvgW;
+      final peak = s.smoothPeakMw;
       summary = [
         if (end != null) '$from → ${fmtPct(end ~/ 10)}' else '$from → läuft',
         if (avg != null) 'Ø ${fmtWatts((avg * 1000).round())}',
-        if (s.peakMw != null) 'max. ${fmtWatts(s.peakMw!)}',
+        if (peak != null) 'max. ${fmtWatts(peak)}',
       ].join(' · ');
     }
     return _Section(
@@ -496,6 +506,13 @@ class _TargetSheetState extends State<_TargetSheet> {
           const SizedBox(height: 4),
           Text('Der Batterymanager kann das Laden nicht stoppen – er sagt dir, wann du abstecken solltest.',
               style: tt.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          if (widget.c.live?.deviceLimitPct != null && target > widget.c.live!.deviceLimitPct!) ...[
+            const SizedBox(height: 8),
+            Text(
+                'Dein Gerät lädt nur bis ca. ${fmtPct(widget.c.live!.deviceLimitPct!)} (Ladeschutz in den Android-Einstellungen). '
+                'Der Alarm kommt, sobald es dort anhält.',
+                style: tt.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
+          ],
           const SizedBox(height: 16),
           Wrap(spacing: 8, children: [
             for (final p in const [80, 85, 90, 100])

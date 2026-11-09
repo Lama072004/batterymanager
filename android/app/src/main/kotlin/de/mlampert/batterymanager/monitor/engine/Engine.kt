@@ -15,6 +15,8 @@ class Engine(
     var chargeProfile: Map<Triple<Int, Int, Int>, Double> = emptyMap(),
     /** Geschätzte Akkukapazität (mAh, aus CHARGE_COUNTER), für die Sofort-Restzeit vor dem ersten %-Schritt. */
     var capacityMah: Double? = null,
+    /** Erkanntes Ladelimit des Geräts in % (z. B. Ladeschutz 90 %), null = unbekannt. */
+    var deviceLimitPct: Int? = null,
 ) {
     class Session(
         val startT: Long,
@@ -51,6 +53,22 @@ class Engine(
         var maxPowerMw: Long? = null
         var etaShownTarget: Long? = null
         var etaShownFull: Long? = null
+        /** Ladepause/Halten: seit wann und auf welchem Stand (für die Ladelimit-Erkennung). */
+        var pauseSinceT: Long? = null
+        var pausePct: Int? = null
+        var limitRecorded = false
+        /** Energie und Dauer nur der aktiven Ladephase (ohne Halten/Pause/Defizit) – für den Ø. */
+        var activeERaw = 0.0
+        var activeMs = 0L
+        /** Anteil seit dem letzten Stand-Wechsel – wird bei erkannter Pause rückwirkend abgezogen. */
+        var constERaw = 0.0
+        var constMs = 0L
+        /** Letzte drei Leistungswerte; Spitze = Maximum des gleitenden Medians (filtert Messspitzen). */
+        val lastPowers = ArrayDeque<Long>()
+        /** Ø-Leistung der aktiven Ladephase in mW (normalisiert mit dem übergebenen Profil). */
+        fun activeAvgMw(p: Profile): Long? =
+            if (activeMs < 60_000 || activeERaw <= 0) null
+            else roundHalfAway(p.sign * p.f * activeERaw / (activeMs / 1000.0))
     }
 
     var session: Session? = null
@@ -167,15 +185,20 @@ class Engine(
 
         // Warmup und Leistungsklasse
         val sinceStart = r.t - s.startT
-        if (sinceStart < WARMUP_MS) {
-            if (p != null) { s.warmupSum += p; s.warmupN++ }
-        } else if (s.klass == 0 && s.warmupN > 0) {
+        // Leistungsklasse: sofort vorläufig aus dem laufenden Mittel, nach dem Warmup fest.
+        if (sinceStart < WARMUP_MS && p != null && p > 0) {
+            s.warmupSum += p; s.warmupN++
             val avg = s.warmupSum / s.warmupN
             s.klass = when { avg <= 7_500 -> 1; avg <= 18_000 -> 2; else -> 3 }
         }
         if (p != null) {
             s.powerEmaMw = s.powerEmaMw?.let { it + 0.3 * (p - it) } ?: p.toDouble()
-            s.maxPowerMw = max(s.maxPowerMw ?: p, p)
+            s.lastPowers.addLast(p)
+            if (s.lastPowers.size > 3) s.lastPowers.removeFirst()
+            if (s.lastPowers.size == 3) {
+                val median = s.lastPowers.sorted()[1]
+                s.maxPowerMw = max(s.maxPowerMw ?: median, median)
+            }
         }
 
         // Energie (Rohprodukt × s) für session_n
@@ -184,6 +207,17 @@ class Engine(
             val raw = rawProduct(r)
             if (raw != null && dtS in 0.0..600.0) {
                 s.eRaw += raw * dtS
+                if (!s.pause && !s.deficit && s.fullSinceUtc == null) {
+                    s.activeERaw += raw * dtS
+                    s.activeMs += r.t - s.lastT
+                    if (r.levelPm == s.lastLevelPm) {
+                        s.constERaw += raw * dtS
+                        s.constMs += r.t - s.lastT
+                    } else {
+                        s.constERaw = 0.0
+                        s.constMs = 0
+                    }
+                }
                 s.pkMaxRaw = max(s.pkMaxRaw ?: raw, raw)
                 s.pkMinRaw = min(s.pkMinRaw ?: raw, raw)
             }
@@ -208,10 +242,17 @@ class Engine(
 
         // Pause
         if (r.levelPm != s.lastLevelPm) s.levelConstSince = r.t
-        if (!s.pause && c != null && abs(c) < PAUSE_MA && r.t - s.levelConstSince >= PAUSE_MS) {
-            s.pause = true; ev += Event(Event.PAUSE_START)
-        } else if (s.pause && (r.levelPm != s.lastLevelPm || (c != null && abs(c) >= PAUSE_MA))) {
-            s.pause = false; ev += Event(Event.PAUSE_END)
+        // Pause/Halten: Ladestand ≥ 10 min konstant und kaum Strom (Handys „halten“ am Limit oft mit
+        // 50–300 mA Erhaltungsstrom). Ohne Stromwert genügt der konstante Ladestand.
+        if (!s.pause && (c == null || abs(c) < HOLD_MA) && r.t - s.levelConstSince >= PAUSE_MS) {
+            s.pause = true; s.pauseSinceT = s.levelConstSince; s.pausePct = r.pct
+            // Die Haltezeit vor der Erkennung gehört nicht zur aktiven Ladephase.
+            s.activeERaw -= s.constERaw; s.activeMs -= s.constMs
+            s.constERaw = 0.0; s.constMs = 0
+            ev += Event(Event.PAUSE_START, mapOf("levelPct" to r.pct))
+        } else if (s.pause && (r.levelPm != s.lastLevelPm || (c != null && abs(c) >= HOLD_MA))) {
+            s.pause = false; s.pauseSinceT = null; s.pausePct = null
+            ev += Event(Event.PAUSE_END)
         }
 
         // Defizit (eingesteckt, aber Netto-Entladung)
@@ -224,11 +265,16 @@ class Engine(
         }
 
         // Ziel-Alarm mit 2-%-Hysterese
-        if (!first) {
+        val limit = deviceLimitPct
+        if (!first && !s.reached && limit != null && settings.targetPct >= limit && s.pause && pct >= limit - 2) {
+            // Ziel liegt am/über dem Gerätelimit: Das Gerät hält jetzt an → das ist „Ziel erreicht“.
+            s.reached = true; s.reachedUtc = r.utc
+            ev += Event(Event.TARGET_REACHED, mapOf("targetPct" to settings.targetPct, "deviceLimit" to limit))
+        } else if (!first) {
             if (!s.reached && pct >= settings.targetPct) {
                 s.reached = true; s.reachedUtc = r.utc
                 ev += Event(Event.TARGET_REACHED, mapOf("targetPct" to settings.targetPct))
-            } else if (s.reached && pct < settings.targetPct - 2) {
+            } else if (s.reached && pct < effectiveTarget(limit) - 2) {
                 s.reached = false
             }
         }
@@ -240,6 +286,10 @@ class Engine(
         s.lastT = r.t
         s.lastUtc = r.utc
     }
+
+    /** Ziel, das tatsächlich erreichbar ist: liegt es am/über dem Gerätelimit, gilt der Haltepunkt (Limit − 2). */
+    private fun effectiveTarget(limit: Int?): Int =
+        if (limit != null && settings.targetPct >= limit) limit - 2 else settings.targetPct
 
     private fun rawProduct(r: Reading): Double? = when {
         profile.pSrc == 1 -> r.powerRaw?.toDouble()
@@ -254,7 +304,6 @@ class Engine(
         if (s.fullSinceUtc != null) return Eta(EtaState.FULL)
         if (s.pause) return Eta(EtaState.PAUSE)
         if (s.deficit) return Eta(EtaState.DEFICIT)
-        if (r.t - s.startT < WARMUP_MS && s.steps == 0) return Eta(EtaState.COMPUTING)
 
         // Vor dem ersten beobachteten %-Schritt: Rate aus Ladestrom und Kapazität schätzen (nur „ca.“).
         val fromCurrent = run {
@@ -282,9 +331,13 @@ class Engine(
             for (p in pct until to) sum += rate(p) ?: return null
             return sum.toLong()
         }
-        val target = remaining(settings.targetPct)
-        val full = remaining(100)
-        if (target == null && full == null) return Eta(EtaState.NONE)
+        val top = deviceLimitPct?.coerceIn(50, 100) ?: 100
+        val target = remaining(minOf(settings.targetPct, top))
+        val full = remaining(top)
+        // Ohne jede Ratenquelle: im Warmup „wird berechnet“, danach „—“.
+        if (target == null && full == null) {
+            return Eta(if (r.t - s.startT < WARMUP_MS) EtaState.COMPUTING else EtaState.NONE)
+        }
 
         val covered = (pct until 100).count { chargeProfile.containsKey(Triple(s.plug, s.klass, it)) }
         val coverage = if (pct >= 100) 1.0 else covered.toDouble() / (100 - pct)
@@ -297,7 +350,9 @@ class Engine(
         val estimated = !profile.currentSupported
         if (estimated) conf = min(conf, 0.5)
         val state = when { conf >= 0.7 -> EtaState.OK; conf >= 0.4 -> EtaState.APPROX; else -> EtaState.NONE }
-        if (state == EtaState.NONE) return Eta(EtaState.NONE, conf = conf, estimated = estimated)
+        if (state == EtaState.NONE) {
+            return Eta(if (r.t - s.startT < WARMUP_MS) EtaState.COMPUTING else EtaState.NONE, conf = conf, estimated = estimated)
+        }
         s.etaShownTarget = hysteresis(s.etaShownTarget, target)
         s.etaShownFull = hysteresis(s.etaShownFull, full)
         return Eta(state, s.etaShownTarget, s.etaShownFull, conf, estimated)
@@ -314,7 +369,7 @@ class Engine(
         const val RESUME_GAP_MS = 5 * 60_000L
         const val CLOCK_JUMP_MS = 120_000L
         const val PAUSE_MS = 10 * 60_000L
-        const val PAUSE_MA = 50L
+        const val HOLD_MA = 300L
         const val STATUS_FULL = 5
     }
 }

@@ -169,6 +169,27 @@ void main() {
     });
   });
 
+  group('Ladevorgang: Ø und max. (Gerätelimit)', () {
+    test('Ø nur aktive Ladephase, Spitze ohne Einzelausreißer', () {
+      // 35 → 89 % mit ~5 W in 1 h, eine Spitze 21 W, danach 4 h Halten bei 89 % mit 0,3 W
+      final pts = <SessionPoint>[];
+      var t = 0;
+      for (var lv = 350; lv <= 890; lv += 10) {
+        pts.add(SessionPoint(t, lv, lv == 500 ? 21000 : 5000));
+        t += 66;
+      }
+      for (var i = 0; i < 48; i++) {
+        t += 300;
+        pts.add(SessionPoint(t, 890, 300));
+      }
+      final s = ChargeSessionInfo(id: 1, startTs: 0, endTs: t * 1000, startLevelPm: 350, endLevelPm: 890, points: pts,
+          energyMwh: 6000, peakMw: 21000);
+      expect(s.avgW! < 2, isTrue, reason: 'alter Ø über die ganze Sitzung ist irreführend');
+      expect(s.activeAvgW!, inInclusiveRange(4.5, 6.0));
+      expect(s.smoothPeakMw, 5000);
+    });
+  });
+
   group('Formatierung (de_DE)', () {
     test('Zahlen, Einheiten und Dauer', () {
       expect(fmtWatts(18400), '18${nnbsp}W');

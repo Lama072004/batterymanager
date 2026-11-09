@@ -94,7 +94,11 @@ class MonitorService : Service() {
         handler.removeCallbacks(unplugCheck)
         if (isPlugged()) {
             val on = getSystemService(PowerManager::class.java).isInteractive
-            handler.postDelayed(tick, if (on) TICK_SCREEN_ON_MS else TICK_SCREEN_OFF_MS)
+            // Erste Minute nach dem Einstecken: alle 2 s messen (das Netzteil zahlt), damit Watt und
+            // Restzeit schnell stabil sind. Danach 10 s (Bildschirm an) bzw. 30 s (aus).
+            val sess = MonitorRuntime.engine.session
+            val fast = sess != null && android.os.SystemClock.elapsedRealtime() - sess.startT < FAST_PHASE_MS
+            handler.postDelayed(tick, if (fast) TICK_FAST_MS else if (on) TICK_SCREEN_ON_MS else TICK_SCREEN_OFF_MS)
         } else if (MonitorRuntime.engine.session != null) {
             handler.postDelayed(unplugCheck, 121_000L)
         }
@@ -121,6 +125,8 @@ class MonitorService : Service() {
     companion object {
         const val TICK_SCREEN_ON_MS = 10_000L
         const val TICK_SCREEN_OFF_MS = 30_000L
+        const val TICK_FAST_MS = 2_000L
+        const val FAST_PHASE_MS = 60_000L
 
         /** Startet den Dienst (aus Activity, Boot-Receiver oder Job). @return null oder Fehlername. */
         fun start(ctx: Context): String? = try {

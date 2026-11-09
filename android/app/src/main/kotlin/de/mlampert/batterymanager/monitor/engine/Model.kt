@@ -68,6 +68,8 @@ data class Settings(
     val heatWarnDc: Int = 450,
     val summary: Boolean = true,
     val onboarded: Boolean = false,
+    /** Android 16+: Watt dauerhaft als Chip in der Statusleiste (Live Update). Standard aus = nur Symbol. */
+    val liveChip: Boolean = false,
 ) {
     companion object {
         const val MODE_ALWAYS = 0

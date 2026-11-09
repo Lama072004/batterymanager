@@ -34,6 +34,8 @@ data class LiveState(
     val profileSource: Int,
     val serviceRunning: Boolean,
     val summary: String? = null,
+    val liveChip: Boolean = false,
+    val deviceLimitPct: Int? = null,
 ) {
     val pct: Int get() = levelPm / 10
     val charging: Boolean get() = plug > 0
@@ -61,5 +63,6 @@ data class LiveState(
         peakMw?.let { putLong("peakMw", it) }
         putInt("profileRev", profileRev); putInt("profileSource", profileSource)
         putBoolean("serviceRunning", serviceRunning)
+        deviceLimitPct?.let { putInt("deviceLimitPct", it) }
     }
 }

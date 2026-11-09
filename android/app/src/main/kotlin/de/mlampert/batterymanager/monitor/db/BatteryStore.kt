@@ -27,6 +27,7 @@ class BatteryStore(val db: AndroidSqlDb, private val retentionSql: String) {
             heatWarnDc = kv("set.heatWarnDc")?.toIntOrNull() ?: d.heatWarnDc,
             summary = kv("set.summary")?.toBooleanStrictOrNull() ?: d.summary,
             onboarded = kv("set.onboarded")?.toBooleanStrictOrNull() ?: d.onboarded,
+            liveChip = kv("set.liveChip")?.toBooleanStrictOrNull() ?: d.liveChip,
         )
     }
 
@@ -37,6 +38,7 @@ class BatteryStore(val db: AndroidSqlDb, private val retentionSql: String) {
         putKv("set.heatWarnDc", s.heatWarnDc.toString())
         putKv("set.summary", s.summary.toString())
         putKv("set.onboarded", s.onboarded.toString())
+        putKv("set.liveChip", s.liveChip.toString())
     }
 
     // ---------------- Geräteprofil ----------------

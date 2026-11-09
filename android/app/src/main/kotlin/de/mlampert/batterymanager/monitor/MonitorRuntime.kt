@@ -70,7 +70,8 @@ object MonitorRuntime {
             profile = Profile(rev = profile.rev + 1) // OTA: neu lernen
             store.saveProfile(profile, Build.FINGERPRINT)
         }
-        engine = Engine(profile, settings, store.loadChargeProfile())
+        engine = Engine(profile, settings, store.loadChargeProfile(), capacityMah = designCapacityMah(app))
+        engine.deviceLimitPct = store.kv("sys.deviceLimit")?.toIntOrNull() ?: limitFromHistory()
         val last = store.lastReading()
         engine.restore(last, store.openSessionFor(last))
         notif = NotificationController(app)
@@ -142,6 +143,7 @@ object MonitorRuntime {
         }
 
         handleEvents(s, events, r)
+        learnDeviceLimit(r)
 
         // Punkte für Graph 2: bei jedem %-Schritt oder alle 5 min
         engine.session?.let { ses ->
@@ -161,6 +163,57 @@ object MonitorRuntime {
             notif.post(s, currentKind(live), live, isScreenOn(), alert = false, force = false)
         }
     }
+
+    /**
+     * Ladelimit des Geräts lernen (z. B. „Akku schützen“ 90 %): Hält das Gerät den Akku eingesteckt ≥ 30 min
+     * auf demselben Stand (50–99 %), ist das das Limit. Lädt es später ≥ 2 % darüber, wird es verworfen.
+     */
+    private fun learnDeviceLimit(r: Reading) {
+        if (!r.plugged) return
+        val known = engine.deviceLimitPct
+        if (known != null && r.pct >= known + 2) {
+            setDeviceLimit(null)
+            return
+        }
+        val ses = engine.session ?: return
+        val since = ses.pauseSinceT ?: return
+        val pct = ses.pausePct ?: return
+        if (ses.limitRecorded || pct !in 50..99 || r.t - since < LIMIT_HOLD_MS) return
+        ses.limitRecorded = true
+        val rounded = (Math.round(pct / 5.0) * 5).toInt()
+        setDeviceLimit(if (kotlin.math.abs(rounded - pct) <= 1) rounded else pct + 1)
+    }
+
+    /**
+     * Einmalig beim Start: Ladelimit aus dem letzten abgeschlossenen Ladevorgang ableiten, falls der Akku dort
+     * ≥ 30 min auf seinem Endstand (50–99 %) gehalten wurde. So wirkt die Erkennung auch rückwirkend.
+     */
+    private fun limitFromHistory(): Int? {
+        if (store.kv("sys.limitScan") != null) return null
+        store.putKv("sys.limitScan", "1")
+        val (endPm, holdS) = store.db.raw.rawQuery(
+            "SELECT cs.end_level_pm, MAX(sp.t_off_s) - MIN(sp.t_off_s) FROM charge_session cs " +
+                "JOIN session_point sp ON sp.session = cs.id AND sp.level_pm >= cs.end_level_pm - 5 " +
+                "WHERE cs.end_ts IS NOT NULL AND cs.end_level_pm BETWEEN 500 AND 995 " +
+                "GROUP BY cs.id ORDER BY cs.start_ts DESC LIMIT 1", null
+        ).use { if (it.moveToFirst()) it.getInt(0) to it.getLong(1) else return null }
+        if (holdS < LIMIT_HOLD_MS / 1000) return null
+        val pct = endPm / 10
+        val rounded = (Math.round(pct / 5.0) * 5).toInt()
+        val limit = if (kotlin.math.abs(rounded - pct) <= 1) rounded else pct + 1
+        store.putKv("sys.deviceLimit", limit.toString())
+        return limit
+    }
+
+    private fun setDeviceLimit(limit: Int?) {
+        engine.deviceLimitPct = limit
+        if (limit == null) store.db.raw.execSQL("DELETE FROM kv WHERE key = 'sys.deviceLimit'")
+        else store.putKv("sys.deviceLimit", limit.toString())
+        repost()
+    }
+
+    @Synchronized
+    fun resetDeviceLimit() = setDeviceLimit(null)
 
     private fun handleEvents(s: MonitorService?, events: List<Event>, r: Reading?) {
         for (e in events) {
@@ -224,7 +277,7 @@ object MonitorRuntime {
         val minutes = ((s.lastUtc - s.startUtc) / 60_000).coerceAtLeast(1)
         val dur = if (minutes < 60) "$minutes${Fmt.NNBSP}Min." else "${minutes / 60}${Fmt.NNBSP}Std. ${minutes % 60}${Fmt.NNBSP}Min."
         val start = if (s.startKnown) Fmt.pct(s.startLevelPm / 10) else "Erfasst ab ${Fmt.pct(s.startLevelPm / 10)}"
-        val avg = if (s.eRaw > 0 && s.lastUtc > s.startUtc) " · Ø ${Fmt.watts((profile.f * s.eRaw / ((s.lastUtc - s.startUtc) / 1000.0) * profile.sign).toLong())}" else ""
+        val avg = s.activeAvgMw(profile)?.let { " · Ø ${Fmt.watts(it)}" } ?: ""
         val max = s.maxPowerMw?.let { ", max. ${Fmt.watts(it)}" } ?: ""
         return "$start → ${Fmt.pct(endPct)} in $dur$avg$max" + if (!s.startKnown) " · Beginn nicht erfasst" else ""
     }
@@ -353,6 +406,8 @@ object MonitorRuntime {
             profileSource = profile.source,
             serviceRunning = service != null,
             summary = summaryText,
+            liveChip = settings.liveChip,
+            deviceLimitPct = engine.deviceLimitPct,
         )
     }
 
@@ -380,6 +435,16 @@ object MonitorRuntime {
         )
     }
 
+    /**
+     * Ersatz-Kapazität aus der Herstellerangabe (PowerProfile, nicht-öffentliche API, per Reflection).
+     * Nur plausible Werte; wird durch die Messung aus CHARGE_COUNTER ersetzt, sobald diese vorliegt.
+     */
+    private fun designCapacityMah(ctx: Context): Double? = runCatching {
+        val c = Class.forName("com.android.internal.os.PowerProfile")
+        val pp = c.getConstructor(Context::class.java).newInstance(ctx)
+        c.getMethod("getBatteryCapacity").invoke(pp) as Double
+    }.getOrNull()?.takeIf { it in 1_500.0..8_000.0 }
+
     fun sticky(ctx: Context): Intent? = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
 
     private fun isScreenOn(): Boolean = app.getSystemService(PowerManager::class.java).isInteractive
@@ -388,4 +453,5 @@ object MonitorRuntime {
 
     const val FLUSH_CHARGING_MS = 60_000L
     const val SUMMARY_MS = 15 * 60_000L
+    const val LIMIT_HOLD_MS = 30 * 60_000L
 }

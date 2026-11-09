@@ -11,6 +11,7 @@ abstract class BatteryBackend {
   Future<AppState?> putSettings(Map<String, Object> changes);
   Future<AppState?> setProfile(Map<String, Object> profile);
   Future<void> clearHistory();
+  Future<void> resetLimit();
   Future<void> seedDemo();
   Future<History> history(int from, int to, {required int mode});
   Future<SystemStatus> systemStatus();
@@ -50,6 +51,9 @@ class AndroidBackend implements BatteryBackend {
 
   @override
   Future<void> seedDemo() => _call('seedDemo');
+
+  @override
+  Future<void> resetLimit() => _call('resetLimit');
 
   Future<String> _q(String name) async => _sql[name] ??= await rootBundle.loadString('spec/db/q/$name');
 
@@ -189,6 +193,7 @@ class FakeBackend implements BatteryBackend {
       heatWarnDc: (changes['heatWarnDc'] as int?) ?? appState.heatWarnDc,
       summary: (changes['summary'] as bool?) ?? appState.summary,
       onboarded: (changes['onboarded'] as bool?) ?? appState.onboarded,
+      liveChip: (changes['liveChip'] as bool?) ?? appState.liveChip,
     );
     return appState;
   }
@@ -199,6 +204,8 @@ class FakeBackend implements BatteryBackend {
   Future<void> clearHistory() async => calls.add('clearHistory');
   @override
   Future<void> seedDemo() async {}
+  @override
+  Future<void> resetLimit() async => calls.add('resetLimit');
   @override
   Future<History> history(int from, int to, {required int mode}) async => _history ?? History.empty(from, to);
   @override

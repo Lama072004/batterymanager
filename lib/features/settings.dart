@@ -69,6 +69,13 @@ class SettingsScreen extends StatelessWidget {
                 value: s.summary,
                 onChanged: (v) => c.putSettings({'summary': v}),
               ),
+              SwitchListTile(
+                title: const Text('Watt in der Statusleiste'),
+                subtitle: const Text('Ab Android 16: Ladeleistung dauerhaft oben neben der Uhr. '
+                    'Aus: oben nur das Symbol – Watt und Restzeit beim Herunterziehen der Benachrichtigung.'),
+                value: s.liveChip,
+                onChanged: (v) => c.putSettings({'liveChip': v}),
+              ),
               ListTile(
                 title: const Text('Hitzewarnung ab'),
                 trailing: Wrap(spacing: 4, children: [
@@ -143,6 +150,13 @@ class SettingsScreen extends StatelessWidget {
                     child: const Text('Automatisch erkennen'),
                   ),
                 ]),
+              ),
+              ListTile(
+                title: const Text('Ladelimit des Geräts'),
+                subtitle: Text(s.deviceLimitPct != null
+                    ? 'ca. ${fmtPct(s.deviceLimitPct!)} – erkannt, weil das Gerät dort ≥ 30 Min. angehalten hat'
+                    : 'Nicht erkannt. Wird gelernt, sobald das Gerät beim Laden ≥ 30 Min. auf einem Stand hält.'),
+                trailing: s.deviceLimitPct == null ? null : TextButton(onPressed: c.resetLimit, child: const Text('Vergessen')),
               ),
               const SizedBox(height: 8),
               ListTile(

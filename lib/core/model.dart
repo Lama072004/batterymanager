@@ -31,9 +31,13 @@ class Live {
     this.peakMw,
     this.serviceRunning = false,
     this.profileSource = 0,
+    this.deviceLimitPct,
   });
 
   final int levelPm, status, plug, health, targetPct, profileSource;
+
+  /// Erkanntes Ladelimit des Geräts (z. B. Ladeschutz 90 %), null = unbekannt.
+  final int? deviceLimitPct;
   final int? screen, currentMa, voltageMv, powerMw, tempDc, cycleCount, capacityMah;
   final String etaState;
   final int? etaTargetS, etaFullS, sessionStartUtc, sessionStartPct, fullSinceUtc, peakMw;
@@ -68,6 +72,7 @@ class Live {
         peakMw: _i(m['peakMw']),
         serviceRunning: (m['serviceRunning'] as bool?) ?? false,
         profileSource: _i(m['profileSource']) ?? 0,
+        deviceLimitPct: _i(m['deviceLimitPct']),
       );
 }
 
@@ -80,6 +85,7 @@ class AppState {
     this.heatWarnDc = 450,
     this.summary = true,
     this.onboarded = false,
+    this.liveChip = false,
     this.dbPath,
     this.iToMa = 0.001,
     this.sign = 1,
@@ -91,13 +97,19 @@ class AppState {
     this.cpuMs = 0,
     this.flushes = 0,
     this.notifUpdates = 0,
+    this.deviceLimitPct,
   });
+
+  final int? deviceLimitPct;
 
   static const modeAlways = 0;
   static const modeChargingOnly = 1;
 
   final int targetPct, mode, heatWarnDc, sign, cells, profileSource, profileRev, lastSampleId, cpuMs, flushes, notifUpdates;
   final bool alarm, summary, onboarded, serviceRunning;
+
+  /// Android 16+: Watt dauerhaft als Chip in der Statusleiste (sonst nur Symbol).
+  final bool liveChip;
   final String? dbPath;
   final double iToMa;
 
@@ -108,6 +120,7 @@ class AppState {
         heatWarnDc: _i(m['heatWarnDc']) ?? 450,
         summary: (m['summary'] as bool?) ?? true,
         onboarded: (m['onboarded'] as bool?) ?? false,
+        liveChip: (m['liveChip'] as bool?) ?? false,
         dbPath: m['dbPath'] as String?,
         iToMa: _d(m['iToMa']) ?? 0.001,
         sign: _i(m['sign']) ?? 1,
@@ -119,6 +132,7 @@ class AppState {
         cpuMs: _i(m['cpuMs']) ?? 0,
         flushes: _i(m['flushes']) ?? 0,
         notifUpdates: _i(m['notifUpdates']) ?? 0,
+        deviceLimitPct: _i(m['deviceLimitPct']),
       );
 }
 
@@ -171,6 +185,36 @@ class ChargeSessionInfo {
   final bool startKnown;
   final double? energyMwh;
   final List<SessionPoint> points;
+
+  /// Ø-Leistung nur der aktiven Ladephase: zeitgewichtet, bis der Endstand erreicht ist
+  /// (danach hält das Gerät nur noch – z. B. am Ladelimit – und würde den Ø verfälschen).
+  double? get activeAvgW {
+    final pts = points.where((p) => p.powerMw != null).toList();
+    if (pts.length < 3) return avgW;
+    final maxLv = pts.map((p) => p.levelPm).reduce((a, b) => a > b ? a : b);
+    final holdIdx = pts.indexWhere((p) => p.levelPm >= maxLv - 5);
+    final end = holdIdx < 1 ? pts.length - 1 : holdIdx;
+    var e = 0.0, t = 0.0;
+    for (var i = 1; i <= end; i++) {
+      final dt = (pts[i].tOffS - pts[i - 1].tOffS).toDouble();
+      if (dt <= 0) continue;
+      e += (pts[i - 1].powerMw! + pts[i].powerMw!) / 2 * dt;
+      t += dt;
+    }
+    return t <= 0 ? avgW : e / t / 1000.0;
+  }
+
+  /// Spitze aus dem gleitenden Median über drei Punkte (einzelne Messspitzen zählen nicht).
+  int? get smoothPeakMw {
+    final w = points.map((p) => p.powerMw).whereType<int>().toList();
+    if (w.length < 3) return peakMw;
+    var best = 0;
+    for (var i = 1; i + 1 < w.length; i++) {
+      final m = ([w[i - 1], w[i], w[i + 1]]..sort())[1];
+      if (m > best) best = m;
+    }
+    return best;
+  }
 
   double? get avgW {
     final e = energyMwh;

@@ -58,6 +58,54 @@ class Us006SessionEtaTest {
         assertEquals(EtaState.COMPUTING, e.eta().state)
     }
 
+    // Ladelimit des Geräts (z. B. Ladeschutz 90 %): Halten mit Erhaltungsstrom (~100 mA) gilt als Pause,
+    // der Alarm kommt am Haltepunkt, die Restzeit „bis voll“ rechnet bis zum Limit.
+    @Test
+    fun deviceLimitHoldAndAlarm() {
+        val curve = (0 until 100).associate { Triple(1, 1, it) to 60.0 }
+        val e = Engine(Profile(), Settings(targetPct = 90), curve, deviceLimitPct = 90)
+        var t = 0L
+        val events = mutableListOf<String>()
+        for (lv in 850..890 step 10) {
+            events += e.onReading(Reading(t, t, 1, 60, 1, lv, 2, 1, 1, 1_000_000, 4300, null, null, 300)).map { it.type }
+            t += 60_000
+        }
+        // Restzeit bis Limit (89 → 90 %) statt bis 100 %
+        assertTrue("bis Limit, nicht bis 100 %", (e.eta().fullS ?: 0) <= 120)
+        // 12 min halten bei 89 % mit 100 mA → Pause + Ziel erreicht (Ziel 90 % ≥ Limit 90 %)
+        repeat(12) {
+            events += e.onReading(Reading(t, t, 1, 60, 1, 890, 2, 1, 1, 100_000, 4350, null, null, 300)).map { it.type }
+            t += 60_000
+        }
+        assertTrue(events.toString(), Event.PAUSE_START in events)
+        assertEquals(events.toString(), 1, events.count { it == Event.TARGET_REACHED })
+        assertEquals(EtaState.PAUSE, e.eta().state)
+        assertEquals(89, e.session?.pausePct)
+    }
+
+    // Ø nur über die aktive Ladephase, Spitze ohne einzelne Messausreißer.
+    @Test
+    fun activeAverageAndSmoothedPeak() {
+        val e = Engine(Profile(), Settings(targetPct = 100))
+        var t = 0L
+        var lv = 400
+        // 30 min aktiv mit 5 W (1,25 A · 4 V), eine Einzel-Spitze 21 W
+        repeat(30) { i ->
+            val cur = if (i == 10) 5_250_000L else 1_250_000L
+            e.onReading(Reading(t, t, 1, 60, 1, lv, 2, 1, 1, cur, 4000, null, null, 300))
+            t += 60_000; lv += 5
+        }
+        // danach 2 h halten mit 0,4 W
+        repeat(120) {
+            e.onReading(Reading(t, t, 1, 60, 1, lv, 2, 1, 1, 100_000, 4000, null, null, 300))
+            t += 60_000
+        }
+        val s = e.session!!
+        val avg = s.activeAvgMw(Profile())!!
+        assertTrue("Ø aktiv ≈ 5 W, war $avg", avg in 4_500..6_500)
+        assertTrue("Spitze ohne Ausreißer, war ${s.maxPowerMw}", (s.maxPowerMw ?: 0) in 4_500..6_000)
+    }
+
     // Sofort-Restzeit: vor dem ersten %-Schritt aus Ladestrom und Kapazität (5.000 mAh, 2 A → 90 s je %).
     @Test
     fun etaFromCurrentBeforeFirstStep() {

@@ -130,6 +130,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  Future<void> resetLimit() async {
+    await backend.resetLimit();
+    state = await backend.state() ?? state;
+    live = await backend.snapshot() ?? live;
+    notifyListeners();
+  }
+
   Future<void> seedDemo() async {
     await backend.seedDemo();
     await loadHistory();
