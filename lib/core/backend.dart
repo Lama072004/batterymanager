@@ -13,12 +13,14 @@ abstract class BatteryBackend {
   Future<void> clearHistory();
   Future<void> resetLimit();
   Future<void> seedDemo();
-  Future<History> history(int from, int to, {required int mode});
+  /// [levelFrom]: Beginn der Verlaufsdaten (früher als [from], damit man im Graphen zurückscrollen kann).
+  Future<History> history(int from, int to, {required int mode, int? levelFrom});
   Future<SystemStatus> systemStatus();
   Future<bool> requestNotificationPermission();
   Future<void> requestIgnoreBatteryOptimizations();
   Future<void> openNotificationSettings();
   Future<void> openBatterySettings();
+  Future<void> openMonitorChannelSettings();
   Future<String?> startService();
 }
 
@@ -71,11 +73,12 @@ class AndroidBackend implements BatteryBackend {
   }
 
   @override
-  Future<History> history(int from, int to, {required int mode}) async {
+  Future<History> history(int from, int to, {required int mode, int? levelFrom}) async {
     final db = await _open();
     if (db == null) return History.empty(from, to);
+    final lf = levelFrom ?? from;
     final bucket = (to - from) <= 26 * 3600 * 1000 ? 180000 : 1200000;
-    final levels = (await db.rawQuery(await _q('series.sql'), [from, to, bucket]))
+    final levels = (await db.rawQuery(await _q('series.sql'), [lf, to, bucket]))
         .map((r) => LevelPoint(
               r['span'] as int,
               r['bucket_ts'] as int,
@@ -85,11 +88,11 @@ class AndroidBackend implements BatteryBackend {
               r['plugged'] == 1,
             ))
         .toList();
-    final coverage = (await db.rawQuery(await _q('spans.sql'), [from, to]))
+    final coverage = (await db.rawQuery(await _q('spans.sql'), [lf, to]))
         .map((r) => Coverage(r['start_ts'] as int, r['end_ts'] as int))
         .toList();
     final sessions = <ChargeSessionInfo>[];
-    for (final r in await db.rawQuery(await _q('sessions.sql'), [4])) {
+    for (final r in await db.rawQuery(await _q('sessions.sql'), [12])) {
       final pts = (await db.rawQuery(await _q('points.sql'), [r['id']]))
           .map((p) => SessionPoint(p['t_off_s'] as int, p['level_pm'] as int, p['power_mw'] as int?))
           .toList();
@@ -108,7 +111,17 @@ class AndroidBackend implements BatteryBackend {
     final drain = mode == AppState.modeChargingOnly
         ? _drainBetweenSessions(sessions)
         : _drain(await db.rawQuery(await _q('drain.sql'), [from, to]));
-    return History(from: from, to: to, levels: levels, coverage: coverage, sessions: sessions, drain: drain);
+    var health = const <HealthPoint>[];
+    try {
+      health = (await db.rawQuery(await _q('health.sql')))
+          .map((r) => HealthPoint(r['ts_utc'] as int, (r['capacity_mah'] as num).toDouble(),
+              designMah: (r['design_mah'] as num?)?.toDouble(), cycles: r['cycles'] as int?))
+          .toList();
+    } catch (_) {
+      // Dienst hat die Datenbank noch nicht auf v2 migriert.
+    }
+    return History(
+        from: from, to: to, levelFrom: lf, levels: levels, coverage: coverage, sessions: sessions, drain: drain, health: health);
   }
 
   static DrainStats _drain(List<Map<String, Object?>> rows) {
@@ -161,6 +174,9 @@ class AndroidBackend implements BatteryBackend {
   Future<void> openBatterySettings() => _ch.invokeMethod('openBatterySettings');
 
   @override
+  Future<void> openMonitorChannelSettings() => _ch.invokeMethod('openMonitorChannelSettings');
+
+  @override
   Future<String?> startService() => _ch.invokeMethod<String>('startService');
 }
 
@@ -194,6 +210,7 @@ class FakeBackend implements BatteryBackend {
       summary: (changes['summary'] as bool?) ?? appState.summary,
       onboarded: (changes['onboarded'] as bool?) ?? appState.onboarded,
       liveChip: (changes['liveChip'] as bool?) ?? appState.liveChip,
+      statusIcon: (changes['statusIcon'] as bool?) ?? appState.statusIcon,
     );
     return appState;
   }
@@ -207,7 +224,7 @@ class FakeBackend implements BatteryBackend {
   @override
   Future<void> resetLimit() async => calls.add('resetLimit');
   @override
-  Future<History> history(int from, int to, {required int mode}) async => _history ?? History.empty(from, to);
+  Future<History> history(int from, int to, {required int mode, int? levelFrom}) async => _history ?? History.empty(from, to);
   @override
   Future<SystemStatus> systemStatus() async => status;
   @override
@@ -218,6 +235,8 @@ class FakeBackend implements BatteryBackend {
   Future<void> openNotificationSettings() async {}
   @override
   Future<void> openBatterySettings() async {}
+  @override
+  Future<void> openMonitorChannelSettings() async => calls.add('openMonitorChannelSettings');
   @override
   Future<String?> startService() async {
     calls.add('startService');

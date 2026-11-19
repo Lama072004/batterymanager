@@ -4,15 +4,33 @@ Deutsch | [English](#english)
 
 Minimalistischer, stromsparender Akku-Monitor für **Android**. Eine Flutter-App für die Oberfläche, ein schlanker Kotlin-Hintergrunddienst ohne Flutter-Engine für die Messung. **Kein Internet, kein Konto, keine Telemetrie**: Alle Daten bleiben auf dem Gerät.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="20%"><img src="screenshots/v3/01_uebersicht.png" width="180" alt="Übersicht"><br><sub>Übersicht</sub></td>
+    <td align="center" width="20%"><img src="screenshots/v3/03_akkustand_lupe.png" width="180" alt="Akkustand-Verlauf (Tippen zeigt den Wert)"><br><sub>Akkustand-Verlauf (Tippen zeigt den Wert)</sub></td>
+    <td align="center" width="20%"><img src="screenshots/v3/06_ladeleistung_lupe.png" width="180" alt="Ladeleistung und Akkustand je Ladevorgang"><br><sub>Ladeleistung und Akkustand je Ladevorgang</sub></td>
+    <td align="center" width="20%"><img src="screenshots/v3/07_gesundheit.png" width="180" alt="Akku-Gesundheit mit Trend"><br><sub>Akku-Gesundheit mit Trend</sub></td>
+    <td align="center" width="20%"><img src="screenshots/v3/09_dunkel_ladeleistung.png" width="180" alt="Dunkelmodus"><br><sub>Dunkelmodus</sub></td>
+  </tr>
+</table>
+
+<sub>Aufgenommen im Emulator mit Demo-Daten.</sub>
+
 ## Funktionen
 
 - **Live-Ladeanzeige** als Benachrichtigung: Ladestand, Leistung in Watt, Restzeit bis zum Ladeziel bzw. bis voll
 - **Ladeziel mit Alarm** (Standard 80 %): Ton und Vibration genau einmal pro Ladevorgang, Erinnerung nach 10 Min.
 - **Zusammenfassung nach dem Laden**, z. B. „23 % → 81 % in 52 Min. · Ø 15 W“
-- **Verlauf** über 24 Std. und 7 Tage: Ladestand, Ladevorgänge mit Leistungskurve, Entladerate in %/h (Bildschirm an/aus)
+- **Akkustand-Verlauf** über 24 Std. oder 7 Tage, per Wischen bis 7 bzw. 30 Tage zurück verschiebbar, mit Hilfslinien alle 10 % und Lupe (Tippen zeigt Zeit, Stand und Leistung)
+- **Ladeleistung je Ladevorgang**: Leistung als Fläche über der Zeit, darunter der Akkustand, mit Markierung, wann das Ladeziel erreicht war
+- **Entladerate** in %/h (Bildschirm an/aus)
+- **Akku-Gesundheit**: Kapazität wird bei jedem Ladevorgang gemessen (Ladezähler ÷ geladene Prozent). Ein robuster Trend (Theil-Sen) zeigt den Verlust pro Monat und wann voraussichtlich 80 % der Nennkapazität erreicht sind
+- **Statusleiste nach Wahl**: Symbol aus (Standard), Watt und Restzeit dann nur beim Herunterziehen; ab Android 16 optional als Live-Chip mit Watt
 - **Hitzewarnung** ab einstellbarer Akkutemperatur (40 / 45 / 50 °C)
 - **Geräteprofil mit Selbsterkennung**: Einheit und Vorzeichen des Ladestroms sowie Zellenzahl werden automatisch gelernt und lassen sich manuell überschreiben
-- **Restzeit-Schätzung** aus gelernten Ladekurven, mit Konfidenzstufen („ca.“, „—“) statt falscher Genauigkeit
+- **Lernende Restzeit** (läuft komplett auf dem Gerät): Aus früheren Ladevorgängen lernt die App, wie viel Energie jeder Prozentpunkt braucht und wie die Ladeleistung zum Ende hin abfällt. Zusammen mit der **aktuellen Wattzahl** gibt es so ab dem Einstecken eine Prognose bis zum Ziel bzw. Limit. Systematische Abweichungen früherer Prognosen werden automatisch ausgeglichen. Mit Konfidenzstufen („ca.“, „—“) statt falscher Genauigkeit
 - Erkennt Ladepausen, Netto-Entladung am Kabel, Wackelkontakte (< 2 Min. zählt als dieselbe Sitzung) und Uhrsprünge
 - **Zwei Betriebsmodi**: „Immer aktiv“ (empfohlen) oder „Nur beim Laden“
 - Material You (dynamische Systemfarben ab Android 12), Hell/Dunkel
@@ -105,15 +123,33 @@ Noch nicht festgelegt.
 
 A minimalist, low-power battery monitor for **Android**. The UI is a Flutter app; measurement is done by a lean Kotlin background service without a Flutter engine. **No internet, no account, no telemetry**: all data stays on the device.
 
+### Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="20%"><img src="screenshots/v3/01_uebersicht.png" width="180" alt="Overview"><br><sub>Overview</sub></td>
+    <td align="center" width="20%"><img src="screenshots/v3/03_akkustand_lupe.png" width="180" alt="Charge history (tap shows the value)"><br><sub>Charge history (tap shows the value)</sub></td>
+    <td align="center" width="20%"><img src="screenshots/v3/06_ladeleistung_lupe.png" width="180" alt="Charging power and level per session"><br><sub>Charging power and level per session</sub></td>
+    <td align="center" width="20%"><img src="screenshots/v3/07_gesundheit.png" width="180" alt="Battery health with trend"><br><sub>Battery health with trend</sub></td>
+    <td align="center" width="20%"><img src="screenshots/v3/09_dunkel_ladeleistung.png" width="180" alt="Dark mode"><br><sub>Dark mode</sub></td>
+  </tr>
+</table>
+
+<sub>Taken in the emulator with demo data.</sub>
+
 ### Features
 
 - **Live charging notification**: charge level, power in watts, remaining time to the charge target or to full
 - **Charge target with alarm** (default 80 %): sound and vibration exactly once per charging session, reminder after 10 min
 - **Summary after charging**, e.g. "23 % → 81 % in 52 min · avg 15 W"
-- **History** over 24 h and 7 days: charge level, charging sessions with power curve, discharge rate in %/h (screen on/off)
+- **Charge history** over 24 h or 7 days, swipe back up to 7 or 30 days, grid lines every 10 % and a magnifier (tap shows time, level and power)
+- **Charging power per session**: power as an area over time with the charge level below and a marker for when the target was reached
+- **Discharge rate** in %/h (screen on/off)
+- **Battery health**: capacity is measured on every charge (charge counter ÷ percent charged). A robust trend (Theil–Sen) shows the loss per month and when 80 % of the design capacity is likely to be reached
+- **Status bar your way**: no icon by default (watts and remaining time when you pull down the shade); optional live chip with watts on Android 16+
 - **Heat warning** above an adjustable battery temperature (40 / 45 / 50 °C)
 - **Device profile with auto-detection**: unit and sign of the charging current and cell count are learned automatically and can be overridden manually
-- **Remaining-time estimate** from learned charge curves, with confidence levels ("approx.", "—") instead of false precision
+- **Learning remaining-time estimate** (fully on-device): from past charging sessions the app learns how much energy each percent needs and how charging power tapers off near the end. Combined with the **current wattage** this gives a forecast to the target or limit right after plugging in. Systematic errors of earlier forecasts are corrected automatically. Confidence levels ("approx.", "—") instead of false precision
 - Detects charging pauses, net discharge while plugged in, loose contacts (unplugged < 2 min counts as the same session) and clock jumps
 - **Two operating modes**: "Always active" (recommended) or "Only while charging"
 - Material You (dynamic system colors on Android 12+), light/dark

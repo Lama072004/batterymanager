@@ -79,6 +79,17 @@ object DemoSeeder {
                 val step = if (charging) 5 * minute else 10 * minute
                 t += step; elapsed += step
             }
+            // Akku-Gesundheit: 120 Tage Kapazitätsmessungen, langsam fallend mit Messrauschen.
+            val rnd = java.util.Random(7)
+            var day = 120
+            while (day >= 1) {
+                val cap = 5000.0 * (1 - 0.00035 * (365 - day)) + rnd.nextGaussian() * 40
+                raw.execSQL(
+                    "INSERT OR REPLACE INTO health_point (ts_utc, capacity_mah, design_mah, cycles, window_pm, method) VALUES (?,?,5000,?,?,0)",
+                    arrayOf(now - day * 24 * 60 * minute, cap, 160 + (120 - day) / 2, 400 + rnd.nextInt(400))
+                )
+                day -= 2 + rnd.nextInt(3)
+            }
             for (pct in 0 until 100) {
                 val sec = when { pct < 50 -> 55.0; pct < 80 -> 75.0; else -> 75.0 + (pct - 80) * 12.0 }
                 raw.execSQL("INSERT OR REPLACE INTO charge_profile (plug, klass, pct, sec_per_pct, n) VALUES (1, 3, ?, ?, 6)", arrayOf(pct, sec))

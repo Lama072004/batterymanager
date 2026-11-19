@@ -5,6 +5,8 @@
     <string name="channel_monitor">Hintergrunddienst</string>
     <string name="channel_monitor_desc">Stumme Dauer-Benachrichtigung, solange der Batterymanager im Modus „Immer aktiv“ bereit ist.</string>
     <string name="channel_charging">Laden</string>
+    <string name="channel_charging_quiet">Laden (ohne Symbol)</string>
+    <string name="channel_charging_quiet_desc">Live-Info beim Laden ohne Symbol in der Statusleiste – sichtbar beim Herunterziehen.</string>
     <string name="channel_charging_desc">Live-Info beim Laden: Leistung in Watt und Restzeit. Erscheint einmal beim Einstecken, danach still.</string>
     <string name="channel_target_alarm">Ladeziel-Alarm</string>
     <string name="channel_target_alarm_desc">Ton und Vibration, wenn das eingestellte Ladeziel erreicht ist.</string>

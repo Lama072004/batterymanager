@@ -41,8 +41,10 @@ class NotificationController(private val ctx: Context) {
      * @param force Zustandswechsel → Drosselung umgehen.
      */
     fun post(service: Service?, kind: Kind, live: LiveState, screenOn: Boolean, alert: Boolean, force: Boolean) {
-        val key = "$kind/${live.etaState}/${live.charging}/${live.liveChip}"
         val now = SystemClock.elapsedRealtime()
+        if (alert) lastAlertElapsed = now
+        val quiet = quietChannel(kind, live, alert, now)
+        val key = "$kind/${live.etaState}/${live.charging}/${live.liveChip}/$quiet"
         if (!force && key == lastKey) {
             if (!screenOn) return
             // In der ersten Minute einer Ladesitzung schneller aktualisieren (Watt/Restzeit stabilisieren sich).
@@ -53,22 +55,33 @@ class NotificationController(private val ctx: Context) {
             val dEta = abs((live.etaTargetS ?: live.etaFullS ?: 0) - (lastEtaS ?: 0)) >= 60
             if (!dW && !dPct && !dEta) return
         }
-        val n = build(kind, live, alert)
+        val n = build(kind, live, alert, quiet)
         // Ruhezustand = ID 1 (stumm). Laden/Alarm/Hitze/Zusammenfassung = ID 2: Beim Einstecken entsteht damit
         // eine NEUE Benachrichtigung auf dem HIGH-Kanal – nur so zeigt Android das Heads-up-Banner
         // (stumme Updates einer bestehenden Benachrichtigung poppen nicht auf). Es bleibt immer genau eine sichtbar.
         val id = if (kind == Kind.IDLE) NotificationChannels.ID_MONITOR else NotificationChannels.ID_CHARGING
         val other = if (id == NotificationChannels.ID_MONITOR) NotificationChannels.ID_CHARGING else NotificationChannels.ID_MONITOR
-        if (service != null) {
-            if (Build.VERSION.SDK_INT >= 34) {
-                service.startForeground(id, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        if (!live.statusIcon && !live.liveChip) {
+            // Ohne Statusleisten-Symbol: Android hebt die Benachrichtigung eines Vordergrunddienstes immer auf
+            // mindestens LOW an (= Symbol oben). Deshalb hängt der Dienst dauerhaft an ID 1 (Kanal „Hintergrunddienst“,
+            // den man in Android ausschalten kann, ohne den Dienst zu stoppen), und die Lade-Info ist eine
+            // eigene, normale Benachrichtigung (ID 2) – die bleibt auf MIN: kein Symbol, sichtbar beim Herunterziehen.
+            if (service != null && fgsQuietOwner !== service) {
+                startFg(service, NotificationChannels.ID_MONITOR, build(Kind.IDLE, live, alert = false, quiet = false))
+                fgsQuietOwner = service
+            }
+            if (kind == Kind.IDLE) {
+                nm.cancel(NotificationChannels.ID_CHARGING)
+                if (service == null) nm.notify(id, n)
             } else {
-                service.startForeground(id, n)
+                nm.notify(NotificationChannels.ID_CHARGING, n)
             }
         } else {
-            nm.notify(id, n)
+            val wasQuiet = fgsQuietOwner != null
+            fgsQuietOwner = null
+            if (service != null) startFg(service, id, n) else nm.notify(id, n)
+            if (id != lastId || wasQuiet) nm.cancel(other)
         }
-        if (id != lastId) nm.cancel(other)
         lastId = id
         lastKey = key
         lastPostElapsed = now
@@ -76,6 +89,17 @@ class NotificationController(private val ctx: Context) {
         lastPct = live.pct
         lastEtaS = live.etaTargetS ?: live.etaFullS
         updates++
+    }
+
+    /** Dienst, dessen Vordergrund-Benachrichtigung im Modus „ohne Symbol“ bereits an ID 1 hängt. */
+    private var fgsQuietOwner: Service? = null
+
+    private fun startFg(service: Service, id: Int, n: Notification) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            service.startForeground(id, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            service.startForeground(id, n)
+        }
     }
 
     fun postStatus(title: String, text: String) {
@@ -90,12 +114,23 @@ class NotificationController(private val ctx: Context) {
         nm.notify(NotificationChannels.ID_STATUS, n)
     }
 
-    private fun build(kind: Kind, live: LiveState, alert: Boolean): Notification {
+    /**
+     * Statusleisten-Symbol aus: Laden/Zusammenfassung auf dem MIN-Kanal (kein Symbol, nur in der Leiste).
+     * Das Heads-up beim Einstecken kommt trotzdem – die ersten [ALERT_HOLD_MS] bleibt der HIGH-Kanal, danach wechselt
+     * dieselbe Benachrichtigung still auf den MIN-Kanal. Mit „Watt in der Statusleiste“ geht das nicht (Promotion braucht ≥ DEFAULT).
+     */
+    private fun quietChannel(kind: Kind, live: LiveState, alert: Boolean, now: Long): Boolean =
+        (kind == Kind.CHARGING || kind == Kind.SUMMARY) && !live.statusIcon && !live.liveChip &&
+            !alert && now - lastAlertElapsed >= ALERT_HOLD_MS
+
+    private var lastAlertElapsed = -ALERT_HOLD_MS
+
+    private fun build(kind: Kind, live: LiveState, alert: Boolean, quiet: Boolean): Notification {
         val channel = when (kind) {
             Kind.IDLE -> NotificationChannels.MONITOR
             Kind.HEAT -> NotificationChannels.HEAT
             Kind.TARGET -> NotificationChannels.TARGET_ALARM
-            Kind.CHARGING, Kind.SUMMARY -> NotificationChannels.CHARGING
+            Kind.CHARGING, Kind.SUMMARY -> if (quiet) NotificationChannels.CHARGING_QUIET else NotificationChannels.CHARGING
         }
         val (title, text) = texts(kind, live)
         val b = builder(channel)
@@ -116,7 +151,7 @@ class NotificationController(private val ctx: Context) {
             .setCategory(if (kind == Kind.TARGET) Notification.CATEGORY_ALARM else Notification.CATEGORY_PROGRESS)
         if (Build.VERSION.SDK_INT < 26) {
             @Suppress("DEPRECATION")
-            b.setPriority(if (kind == Kind.IDLE) Notification.PRIORITY_MIN else Notification.PRIORITY_HIGH)
+            b.setPriority(if (kind == Kind.IDLE || quiet) Notification.PRIORITY_MIN else Notification.PRIORITY_HIGH)
         }
         if (live.charging && kind != Kind.SUMMARY) {
             b.setProgress(100, live.pct, false)
@@ -221,5 +256,7 @@ class NotificationController(private val ctx: Context) {
     companion object {
         const val MIN_INTERVAL_MS = 10_000L
         const val FAST_INTERVAL_MS = 3_000L
+        /** So lange bleibt die Lade-Info nach dem Einstecken auf dem HIGH-Kanal (Heads-up sichtbar). */
+        const val ALERT_HOLD_MS = 8_000L
     }
 }

@@ -58,6 +58,8 @@ class OverviewScreen extends StatelessWidget {
                       _PowerSection(c: c),
                       const SizedBox(height: 24),
                       _DrainSection(c: c),
+                      const SizedBox(height: 24),
+                      _HealthSection(c: c),
                     ],
                   ),
           ),
@@ -189,6 +191,9 @@ class _Hero extends StatelessWidget {
             : 'Gerät pausiert das Laden (Limit/adaptiv).');
       } else if (live.etaState == 'full' && live.fullSinceUtc != null) {
         etaLines.add('Seit ${fmtClockUtc(live.fullSinceUtc!)} bei 100$nnbsp%');
+      }
+      if ((live.etaState == 'ok' || live.etaState == 'approx') && live.etaLearned > 0) {
+        etaLines.add('Aus aktueller Leistung · gelernt aus ${live.etaLearned} Ladevorgang${live.etaLearned == 1 ? '' : 'en'}');
       }
       if (!live.startKnown && live.sessionStartUtc != null) etaLines.add('Erfasst seit ${fmtClockUtc(live.sessionStartUtc!)}');
     }
@@ -417,8 +422,10 @@ class _PowerSection extends StatelessWidget {
       final from = s.startKnown ? fmtPct(s.startLevelPm ~/ 10) : 'ab ${fmtPct(s.startLevelPm ~/ 10)}';
       final avg = s.activeAvgW;
       final peak = s.smoothPeakMw;
+      final dur = s.endTs != null ? ((s.endTs! - s.startTs) / 1000).round() : (s.points.isEmpty ? null : s.points.last.tOffS);
       summary = [
         if (end != null) '$from → ${fmtPct(end ~/ 10)}' else '$from → läuft',
+        if (dur != null && dur >= 60) fmtDuration(dur, step: 1),
         if (avg != null) 'Ø ${fmtWatts((avg * 1000).round())}',
         if (peak != null) 'max. ${fmtWatts(peak)}',
       ].join(' · ');
@@ -435,7 +442,7 @@ class _PowerSection extends StatelessWidget {
                   : 'Noch kein Ladevorgang aufgezeichnet. Steck dein Gerät ein.')
           : calibrating
               ? _empty(context, 'Leistung wird kalibriert …')
-              : PowerChart(sessions: sessions, selected: i),
+              : PowerChart(session: s, targetPct: c.live?.targetPct ?? 80),
     );
   }
 
@@ -463,6 +470,69 @@ class _DrainSection extends StatelessWidget {
           : Padding(padding: const EdgeInsets.only(right: 4, bottom: 4), child: DrainBars(drain: d)),
     );
   }
+}
+
+class _HealthSection extends StatelessWidget {
+  const _HealthSection({required this.c});
+  final AppController c;
+
+  static const _months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+  @override
+  Widget build(BuildContext context) {
+    final pts = c.history?.health ?? const <HealthPoint>[];
+    final trend = HealthTrend.of(pts);
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    if (trend == null) {
+      return _Section(
+        title: 'Akku-Gesundheit',
+        child: _empty(context, 'Die Kapazität wird bei jedem Ladevorgang über mind. 15 % gemessen. Der erste Wert erscheint nach dem nächsten Laden.'),
+      );
+    }
+    final pct = trend.healthPct;
+    // Android-Wert hat Vorrang (gleiche Zahl wie oben in den Werten).
+    final cycles = c.live?.cycleCount ?? pts.map((p) => p.cycles).whereType<int>().lastOrNull;
+    final ref = trend.designMah ?? pts.first.capacityMah;
+    final loss = trend.lossPctPerMonth(ref);
+    final lines = <String>[];
+    if (trend.slopeMahPerDay == null) {
+      lines.add('Für den Trend braucht es Messungen über mind. 2 Wochen (bisher ${trend.n} in ${trend.days} Tagen).');
+    } else if (loss != null && loss > 0.05) {
+      lines.add('Verlust ca. ${loss.toStringAsFixed(1).replaceAll('.', ',')} Prozentpunkte pro Monat.');
+      final r = trend.reach80Ts;
+      if (r != null) {
+        final d = DateTime.fromMillisecondsSinceEpoch(r);
+        lines.add('80$nnbsp% ${trend.designMah != null ? 'der Nennkapazität' : 'der ersten Messung'} voraussichtlich ca. ${_months[d.month - 1]} ${d.year}.');
+      }
+    } else {
+      lines.add('Kein messbarer Verlust in ${trend.days} Tagen.');
+    }
+    return _Section(
+      title: 'Akku-Gesundheit',
+      footer: _footnote(context,
+          'Gemessen beim Laden (Ladezähler ÷ geladene Prozent). Einzelwerte schwanken um ±2$nnbsp%, der Trend ist robust gegen Ausreißer.'),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Wrap(spacing: 24, runSpacing: 8, children: [
+            if (pct != null) _kv(tt, cs, '${pct.round()}$nnbsp%', 'der Nennkapazität'),
+            _kv(tt, cs, 'ca. ${fmtMah(trend.nowMah.round())}', trend.designMah != null ? 'von ${fmtMah(trend.designMah!.round())}' : 'Kapazität'),
+            if (cycles != null) _kv(tt, cs, '$cycles', 'Ladezyklen'),
+          ]),
+        ),
+        HealthChart(points: pts, trend: trend),
+        const SizedBox(height: 8),
+        for (final l in lines)
+          Padding(padding: const EdgeInsets.only(left: 4, bottom: 2), child: Text(l, style: tt.bodyMedium)),
+      ]),
+    );
+  }
+
+  static Widget _kv(TextTheme tt, ColorScheme cs, String v, String k) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(v, style: tt.titleMedium),
+        Text(k, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+      ]);
 }
 
 // ---------------- Ladeziel-Sheet ----------------

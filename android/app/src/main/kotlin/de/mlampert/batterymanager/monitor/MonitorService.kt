@@ -111,7 +111,10 @@ class MonitorService : Service() {
         if (chargingOnly) {
             // Modus „Nur beim Laden“: Zusammenfassung stehen lassen, Dienst beenden, Job neu planen.
             MonitorRuntime.flush()
-            stopForeground(STOP_FOREGROUND_DETACH)
+            // Mit Symbol hängt die Zusammenfassung am Dienst (ID 2) und bleibt stehen; ohne Symbol ist sie eine
+            // eigene Benachrichtigung, dann wird nur die Dienst-Benachrichtigung (ID 1) entfernt.
+            val quiet = !MonitorRuntime.settings.statusIcon && !MonitorRuntime.settings.liveChip
+            stopForeground(if (quiet) STOP_FOREGROUND_REMOVE else STOP_FOREGROUND_DETACH)
             ChargeJobService.schedule(this)
             stopSelf()
         }

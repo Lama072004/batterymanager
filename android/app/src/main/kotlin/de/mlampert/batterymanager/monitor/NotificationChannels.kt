@@ -15,6 +15,8 @@ import de.mlampert.batterymanager.R
 object NotificationChannels {
     const val MONITOR = "monitor"
     const val CHARGING = "charging"
+    /** Wie CHARGING, aber IMPORTANCE_MIN: kein Symbol in der Statusleiste, nur in der heruntergezogenen Leiste. */
+    const val CHARGING_QUIET = "charging_quiet"
     const val TARGET_ALARM = "target_alarm"
     const val HEAT = "heat"
     const val STATUS = "status"
@@ -25,7 +27,7 @@ object NotificationChannels {
     const val ID_ALARM_FALLBACK = 3
     const val ID_STATUS = 5
 
-    val ALL = listOf(MONITOR, CHARGING, TARGET_ALARM, HEAT, STATUS)
+    val ALL = listOf(MONITOR, CHARGING, CHARGING_QUIET, TARGET_ALARM, HEAT, STATUS)
 
     fun ensure(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -43,6 +45,14 @@ object NotificationChannels {
             CHARGING, context.getString(R.string.channel_charging), NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = context.getString(R.string.channel_charging_desc)
+            setShowBadge(false)
+            setSound(null, null)
+            enableVibration(false)
+        }
+        val chargingQuiet = NotificationChannel(
+            CHARGING_QUIET, context.getString(R.string.channel_charging_quiet), NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            description = context.getString(R.string.channel_charging_quiet_desc)
             setShowBadge(false)
             setSound(null, null)
             enableVibration(false)
@@ -76,6 +86,6 @@ object NotificationChannels {
             description = context.getString(R.string.channel_status_desc)
             setShowBadge(false)
         }
-        nm.createNotificationChannels(listOf(monitor, charging, alarm, heat, status))
+        nm.createNotificationChannels(listOf(monitor, charging, chargingQuiet, alarm, heat, status))
     }
 }

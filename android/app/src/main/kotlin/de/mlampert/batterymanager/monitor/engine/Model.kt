@@ -70,6 +70,8 @@ data class Settings(
     val onboarded: Boolean = false,
     /** Android 16+: Watt dauerhaft als Chip in der Statusleiste (Live Update). Standard aus = nur Symbol. */
     val liveChip: Boolean = false,
+    /** Symbol der Lade-Benachrichtigung in der Statusleiste. Aus = nur beim Herunterziehen sichtbar. */
+    val statusIcon: Boolean = false,
 ) {
     companion object {
         const val MODE_ALWAYS = 0
@@ -104,4 +106,6 @@ data class Eta(
     val fullS: Long? = null,
     val conf: Double = 0.0,
     val estimated: Boolean = false,
+    /** > 0: aus dem Lernmodell, gelernt aus so vielen Ladevorgängen. */
+    val learned: Int = 0,
 )

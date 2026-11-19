@@ -44,6 +44,7 @@ object MonitorRuntime {
     var service: MonitorService? = null
         private set
     private var span = 0L
+    private var designMah: Double? = null
     private val pending = mutableListOf<Pair<Reading, Int>>()
     private var lastFlushElapsed = 0L
     private var lastPointUtc = 0L
@@ -70,7 +71,9 @@ object MonitorRuntime {
             profile = Profile(rev = profile.rev + 1) // OTA: neu lernen
             store.saveProfile(profile, Build.FINGERPRINT)
         }
-        engine = Engine(profile, settings, store.loadChargeProfile(), capacityMah = designCapacityMah(app))
+        designMah = designCapacityMah(app)
+        engine = Engine(profile, settings, store.loadChargeProfile(), capacityMah = designMah, model = store.loadModel())
+        bootstrapLearning()
         engine.deviceLimitPct = store.kv("sys.deviceLimit")?.toIntOrNull() ?: limitFromHistory()
         val last = store.lastReading()
         engine.restore(last, store.openSessionFor(last))
@@ -215,6 +218,40 @@ object MonitorRuntime {
     @Synchronized
     fun resetDeviceLimit() = setDeviceLimit(null)
 
+    /**
+     * Einmalig nach dem Update: Lernmodell und Kapazitätsverlauf aus den schon aufgezeichneten
+     * Ladevorgängen nachlernen, damit die Prognose sofort von der bisherigen Nutzung profitiert.
+     */
+    private fun bootstrapLearning() {
+        if (store.kv("sys.modelBoot") != null) return
+        runCatching {
+            val m = engine.model
+            if (m.sessions == 0) for ((klass, steps) in store.historicSteps()) m.learn(steps, klass)
+            store.saveModel(m)
+            for ((ts, dCounter, dPm) in store.historicCapacityWindows()) {
+                capacityFrom(dCounter, dPm)?.let { store.addHealthPoint(ts, it, designMah, null, dPm) }
+            }
+        }
+        store.putKv("sys.modelBoot", "1")
+    }
+
+    /** Kapazität aus einem Ladefenster: ΔCHARGE_COUNTER ÷ ΔLadestand (≥ 15 Prozentpunkte), sonst null. */
+    private fun capacityFrom(dCounterRaw: Long, dPm: Int): Double? {
+        if (dPm < 150 || dCounterRaw <= 0) return null
+        var cap = dCounterRaw / 1000.0 / (dPm / 1000.0) // µAh → mAh
+        if (cap in 1.0..10.0) cap *= 1000 // Gerät liefert mAh statt µAh
+        return cap.takeIf { it in 1_000.0..10_000.0 }
+    }
+
+    private fun recordCapacity(s: Engine.Session) {
+        val c0 = s.counterStartRaw ?: return
+        val c1 = s.counterLastRaw ?: return
+        val dPm = s.counterLastPm - s.counterStartPm
+        val cap = capacityFrom(c1 - c0, dPm) ?: return
+        val cycles = if (Build.VERSION.SDK_INT >= 34) sticky(app)?.getIntExtra(BatteryManager.EXTRA_CYCLE_COUNT, -1)?.takeIf { it >= 0 } else null
+        store.addHealthPoint(s.lastUtc, cap, designMah, cycles, dPm)
+    }
+
     private fun handleEvents(s: MonitorService?, events: List<Event>, r: Reading?) {
         for (e in events) {
             when (e.type) {
@@ -222,7 +259,12 @@ object MonitorRuntime {
                 Event.SESSION_END -> engine.lastEnded?.let { ended ->
                     val reason = when (e.extra["reason"]) { "unplug" -> 0; "kill" -> 1; "reboot" -> 2; else -> 3 }
                     store.endSession(ended, (e.extra["endUtc"] as? Long) ?: System.currentTimeMillis(), reason)
-                    if (reason == 0) { store.learn(ended); engine.chargeProfile = store.loadChargeProfile() }
+                    if (reason == 0) {
+                        store.learn(ended); engine.chargeProfile = store.loadChargeProfile()
+                        engine.model.learn(ended.modelSteps(), ended.klass)
+                        recordCapacity(ended)
+                    }
+                    store.saveModel(engine.model)
                     alarmShowing = false
                     summaryText = summaryOf(ended)
                     summaryUntil = SystemClock.elapsedRealtime() + SUMMARY_MS
@@ -344,6 +386,7 @@ object MonitorRuntime {
         store.clearHistory()
         engine.restore(null, null)
         engine.chargeProfile = emptyMap()
+        engine.model = de.mlampert.batterymanager.monitor.engine.ChargeModel()
         if (service != null) span = store.openSpan(bootCount(), settings.mode, System.currentTimeMillis())
     }
 
@@ -352,6 +395,10 @@ object MonitorRuntime {
     fun reopenSpan() {
         engine.restore(null, null)
         engine.chargeProfile = store.loadChargeProfile()
+        engine.model = de.mlampert.batterymanager.monitor.engine.ChargeModel().also { m ->
+            for ((klass, steps) in store.historicSteps()) m.learn(steps, klass)
+            store.saveModel(m)
+        }
         if (service != null) span = store.openSpan(bootCount(), settings.mode, System.currentTimeMillis())
     }
 
@@ -393,6 +440,7 @@ object MonitorRuntime {
             etaTargetS = eta?.targetS,
             etaFullS = eta?.fullS,
             etaConf = eta?.conf ?: 0.0,
+            etaLearned = eta?.learned ?: 0,
             estimated = eta?.estimated ?: (profile.source == 0),
             targetPct = settings.targetPct,
             alarm = settings.alarm,
@@ -407,6 +455,7 @@ object MonitorRuntime {
             serviceRunning = service != null,
             summary = summaryText,
             liveChip = settings.liveChip,
+            statusIcon = settings.statusIcon,
             deviceLimitPct = engine.deviceLimitPct,
         )
     }

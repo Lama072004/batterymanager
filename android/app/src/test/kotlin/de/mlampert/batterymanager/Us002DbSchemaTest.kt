@@ -25,7 +25,7 @@ class Us002DbSchemaTest {
             val objects = db.rows("SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")
                 .map { "${it["type"]}:${it["name"]}" }.toSet()
             val tables = listOf("span", "sample", "charge_session", "session_point", "charge_profile",
-                "device_profile", "day_stat", "kv")
+                "device_profile", "day_stat", "kv", "charge_model", "health_point")
             val views = listOf("pf", "sample_n", "point_n", "session_n")
             tables.forEach { assertTrue("Tabelle $it fehlt", "table:$it" in objects) }
             views.forEach { assertTrue("View $it fehlt", "view:$it" in objects) }
@@ -62,20 +62,33 @@ class Us002DbSchemaTest {
             val scripts = Spec.schemaScripts()
             val backups = mutableListOf<Int>()
 
-            assertEquals(1, Migrator(db, scripts).migrate { backups += it })
-            assertEquals(1L, db.queryLong("PRAGMA user_version"))
+            val latest = scripts.last().version
+            assertEquals(latest, Migrator(db, scripts).migrate { backups += it })
+            assertEquals(latest.toLong(), db.queryLong("PRAGMA user_version"))
             assertEquals("auto_vacuum muss INCREMENTAL (2) sein", 2L, db.queryLong("PRAGMA auto_vacuum"))
             assertTrue("Neuanlage braucht keine Sicherung", backups.isEmpty())
 
             // Zweiter Lauf: nichts zu tun, keine Sicherung.
-            assertEquals(1, Migrator(db, scripts).migrate { backups += it })
+            assertEquals(latest, Migrator(db, scripts).migrate { backups += it })
             assertTrue(backups.isEmpty())
 
             // Neue Version: Sicherung mit alter Version, dann Migration.
-            val v2 = scripts + Migrator.Script(2, "002_test.sql", "CREATE TABLE t2 (x INTEGER); -- Test;")
-            assertEquals(2, Migrator(db, v2).migrate { backups += it })
+            val next = latest + 1
+            val v2 = scripts + Migrator.Script(next, "%03d_test.sql".format(next), "CREATE TABLE t2 (x INTEGER); -- Test;")
+            assertEquals(next, Migrator(db, v2).migrate { backups += it })
+            assertEquals(listOf(latest), backups)
+            assertEquals(next.toLong(), db.queryLong("PRAGMA user_version"))
+        }
+        // Bestehende v1-Datenbank wird auf v2 gehoben (Update der App auf dem Handy).
+        JdbcSqlDb.file(tmp.newFile("v1.db")).use { db ->
+            val scripts = Spec.schemaScripts()
+            Migrator(db, scripts.filter { it.version == 1 }).migrate()
+            db.exec("INSERT INTO kv (key, value) VALUES ('set.targetPct', '85')")
+            val backups = mutableListOf<Int>()
+            assertEquals(scripts.last().version, Migrator(db, scripts).migrate { backups += it })
             assertEquals(listOf(1), backups)
-            assertEquals(2L, db.queryLong("PRAGMA user_version"))
+            assertEquals("85", db.rows("SELECT value FROM kv WHERE key = 'set.targetPct'").single()["value"])
+            assertEquals(0L, db.queryLong("SELECT COUNT(*) FROM health_point"))
         }
         assertEquals(1, Migrator.versionOf("001_init.sql"))
         assertEquals(null, Migrator.versionOf("init.sql"))

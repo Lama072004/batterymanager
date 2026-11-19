@@ -92,7 +92,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> loadHistory() async {
     final to = _clock().millisecondsSinceEpoch;
     final from = to - (week ? 7 * 24 : 24) * 3600 * 1000;
-    history = await backend.history(from, to, mode: state?.mode ?? 0);
+    // Verlauf zum Zurückscrollen: 24 Std. → 7 Tage, 7 Tage → 30 Tage (so lange werden Rohdaten aufbewahrt).
+    final levelFrom = to - (week ? 30 : 7) * 24 * 3600 * 1000;
+    history = await backend.history(from, to, mode: state?.mode ?? 0, levelFrom: levelFrom);
     _historyForSample = state?.lastSampleId ?? -1;
     _historyAt = _clock();
     if (selectedSession >= (history?.sessions.length ?? 0)) selectedSession = 0;

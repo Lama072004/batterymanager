@@ -17,6 +17,8 @@ class Engine(
     var capacityMah: Double? = null,
     /** Erkanntes Ladelimit des Geräts in % (z. B. Ladeschutz 90 %), null = unbekannt. */
     var deviceLimitPct: Int? = null,
+    /** Lernendes Restzeit-Modell (Energie je % + Leistungskurve), siehe [ChargeModel]. */
+    var model: ChargeModel = ChargeModel(),
 ) {
     class Session(
         val startT: Long,
@@ -65,6 +67,26 @@ class Engine(
         var constMs = 0L
         /** Letzte drei Leistungswerte; Spitze = Maximum des gleitenden Medians (filtert Messspitzen). */
         val lastPowers = ArrayDeque<Long>()
+        /** Für das Lernmodell: Energie (Rohprodukt·s) je Prozentschritt und gleitende Rohleistung. */
+        val stepE = mutableMapOf<Int, Double>()
+        var eAtLastStep = 0.0
+        var powerEmaRaw: Double? = null
+        /** Energie-Korrektur dieses Ladevorgangs (gemessen ÷ gelernt), z. B. kalter Akku. */
+        var kEnergy = 1.0
+        /** Festgehaltene Prognose „bis Ziel“ für das Bias-Lernen. */
+        var predT: Long? = null
+        var predTo = 0
+        var predS = 0.0
+        var predDone = false
+        var hadPause = false
+        /** CHARGE_COUNTER am Anfang/Ende (für die Kapazitätsmessung = Akku-Gesundheit). */
+        var counterStartRaw: Long? = null
+        var counterStartPm = 0
+        var counterLastRaw: Long? = null
+        var counterLastPm = 0
+        /** Prozentschritte für [ChargeModel.learn]. */
+        fun modelSteps(): List<ChargeModel.Step> =
+            stepSec.mapNotNull { (p, sec) -> stepE[p]?.let { ChargeModel.Step(p, sec, it) } }
         /** Ø-Leistung der aktiven Ladephase in mW (normalisiert mit dem übergebenen Profil). */
         fun activeAvgMw(p: Profile): Long? =
             if (activeMs < 60_000 || activeERaw <= 0) null
@@ -200,6 +222,13 @@ class Engine(
                 s.maxPowerMw = max(s.maxPowerMw ?: median, median)
             }
         }
+        rawProduct(r)?.let { abs(it) }?.takeIf { it > 0 }?.let { raw ->
+            s.powerEmaRaw = s.powerEmaRaw?.let { it + 0.3 * (raw - it) } ?: raw
+        }
+        r.counterRaw?.takeIf { it > 0 }?.let { c ->
+            if (s.counterStartRaw == null) { s.counterStartRaw = c; s.counterStartPm = r.levelPm }
+            s.counterLastRaw = c; s.counterLastPm = r.levelPm
+        }
 
         // Energie (Rohprodukt × s) für session_n
         if (!first) {
@@ -229,12 +258,28 @@ class Engine(
             val lst = s.lastStepT
             if (lst != null && !s.pause) {
                 val sec = (r.t - lst) / 1000.0 / (pct - s.lastPct)
-                for (q in s.lastPct until pct) s.stepSec[q] = sec
+                val e = (s.eRaw - s.eAtLastStep) / (pct - s.lastPct)
+                for (q in s.lastPct until pct) {
+                    s.stepSec[q] = sec
+                    if (e != 0.0) s.stepE[q] = e
+                    val ref = model.energyAt(q.coerceIn(0, 99))
+                    if (ref != null && ref > 0 && e != 0.0) {
+                        val ratio = (abs(e) / ref).coerceIn(0.5, 2.0)
+                        s.kEnergy += 0.3 * (ratio - s.kEnergy)
+                    }
+                }
                 s.liveSecPerPct = s.liveSecPerPct?.let { it + 0.3 * (sec - it) } ?: sec
                 s.steps++
             }
             s.lastStepT = r.t
+            s.eAtLastStep = s.eRaw
             s.lastPct = pct
+            // Bias lernen: Wie lange hat es bis zum Ziel wirklich gedauert, verglichen mit der Prognose?
+            val pt = s.predT
+            if (pt != null && !s.predDone && pct >= s.predTo) {
+                s.predDone = true
+                if (!s.hadPause) model.learnBias(s.predS, (r.t - pt) / 1000.0)
+            }
         } else if (pct < s.lastPct) {
             s.lastPct = pct
             s.lastStepT = null
@@ -245,7 +290,7 @@ class Engine(
         // Pause/Halten: Ladestand ≥ 10 min konstant und kaum Strom (Handys „halten“ am Limit oft mit
         // 50–300 mA Erhaltungsstrom). Ohne Stromwert genügt der konstante Ladestand.
         if (!s.pause && (c == null || abs(c) < HOLD_MA) && r.t - s.levelConstSince >= PAUSE_MS) {
-            s.pause = true; s.pauseSinceT = s.levelConstSince; s.pausePct = r.pct
+            s.pause = true; s.pauseSinceT = s.levelConstSince; s.pausePct = r.pct; s.hadPause = true
             // Die Haltezeit vor der Erkennung gehört nicht zur aktiven Ladephase.
             s.activeERaw -= s.constERaw; s.activeMs -= s.constMs
             s.constERaw = 0.0; s.constMs = 0
@@ -305,6 +350,8 @@ class Engine(
         if (s.pause) return Eta(EtaState.PAUSE)
         if (s.deficit) return Eta(EtaState.DEFICIT)
 
+        modelEta(s, r)?.let { return it }
+
         // Vor dem ersten beobachteten %-Schritt: Rate aus Ladestrom und Kapazität schätzen (nur „ca.“).
         val fromCurrent = run {
             val c = profile.currentMa(r.currentRaw) ?: return@run null
@@ -356,6 +403,35 @@ class Engine(
         s.etaShownTarget = hysteresis(s.etaShownTarget, target)
         s.etaShownFull = hysteresis(s.etaShownFull, full)
         return Eta(state, s.etaShownTarget, s.etaShownFull, conf, estimated)
+    }
+
+    /**
+     * Restzeit aus dem gelernten Modell und der aktuellen Leistung (sofort ab dem Einstecken).
+     * null, wenn noch nichts gelernt wurde oder der Bereich bis zum Limit nicht abgedeckt ist.
+     */
+    private fun modelEta(s: Session, r: Reading): Eta? {
+        val m = model
+        if (m.sessions < 1 || !profile.currentSupported) return null
+        val pw = s.powerEmaRaw ?: return null
+        val pct = r.pct
+        val top = deviceLimitPct?.coerceIn(50, 100) ?: 100
+        val to = minOf(settings.targetPct, top)
+        if (!m.covers(pct, top)) return null
+        val target = m.seconds(pct, to, pw, s.klass, s.kEnergy)?.toLong()
+        val full = m.seconds(pct, top, pw, s.klass, s.kEnergy)?.toLong()
+        if (target == null && full == null) return null
+        if (s.predT == null && r.t - s.startT >= WARMUP_MS && pct < to && target != null && target > 0) {
+            s.predT = r.t; s.predTo = to; s.predS = target.toDouble()
+        }
+        val conf = when {
+            m.sessions >= 3 -> 0.85
+            m.sessions >= 2 || s.steps >= 3 -> 0.7
+            else -> 0.5
+        }
+        val state = if (conf >= 0.7) EtaState.OK else EtaState.APPROX
+        s.etaShownTarget = hysteresis(s.etaShownTarget, target)
+        s.etaShownFull = hysteresis(s.etaShownFull, full)
+        return Eta(state, s.etaShownTarget, s.etaShownFull, conf, estimated = false, learned = m.sessions)
     }
 
     private fun hysteresis(shown: Long?, now: Long?): Long? {

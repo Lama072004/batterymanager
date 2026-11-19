@@ -79,6 +79,14 @@ class MainActivity : FlutterActivity() {
                     runCatching { startActivity(i) }
                     result.success(null)
                 }
+                "openMonitorChannelSettings" -> {
+                    val i = if (Build.VERSION.SDK_INT >= 26) Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                        .putExtra(Settings.EXTRA_CHANNEL_ID, de.mlampert.batterymanager.monitor.NotificationChannels.MONITOR)
+                    else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+                    runCatching { startActivity(i) }
+                    result.success(null)
+                }
                 "openBatterySettings" -> {
                     runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
                     result.success(null)
@@ -101,6 +109,8 @@ class MainActivity : FlutterActivity() {
         val pm = getSystemService(PowerManager::class.java)
         return mapOf(
             "notificationsEnabled" to nm.areNotificationsEnabled(),
+            "monitorChannelOff" to (Build.VERSION.SDK_INT >= 26 &&
+                nm.getNotificationChannel(de.mlampert.batterymanager.monitor.NotificationChannels.MONITOR)?.importance == NotificationManager.IMPORTANCE_NONE),
             "ignoringBatteryOptimizations" to pm.isIgnoringBatteryOptimizations(packageName),
             "sdk" to Build.VERSION.SDK_INT,
             "manufacturer" to Build.MANUFACTURER,

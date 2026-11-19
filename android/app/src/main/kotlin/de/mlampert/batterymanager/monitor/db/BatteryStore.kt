@@ -1,6 +1,7 @@
 package de.mlampert.batterymanager.monitor.db
 
 import android.database.sqlite.SQLiteDatabase
+import de.mlampert.batterymanager.monitor.engine.ChargeModel
 import de.mlampert.batterymanager.monitor.engine.Engine
 import de.mlampert.batterymanager.monitor.engine.Profile
 import de.mlampert.batterymanager.monitor.engine.Reading
@@ -28,6 +29,7 @@ class BatteryStore(val db: AndroidSqlDb, private val retentionSql: String) {
             summary = kv("set.summary")?.toBooleanStrictOrNull() ?: d.summary,
             onboarded = kv("set.onboarded")?.toBooleanStrictOrNull() ?: d.onboarded,
             liveChip = kv("set.liveChip")?.toBooleanStrictOrNull() ?: d.liveChip,
+            statusIcon = kv("set.statusIcon")?.toBooleanStrictOrNull() ?: d.statusIcon,
         )
     }
 
@@ -39,6 +41,7 @@ class BatteryStore(val db: AndroidSqlDb, private val retentionSql: String) {
         putKv("set.summary", s.summary.toString())
         putKv("set.onboarded", s.onboarded.toString())
         putKv("set.liveChip", s.liveChip.toString())
+        putKv("set.statusIcon", s.statusIcon.toString())
     }
 
     // ---------------- Geräteprofil ----------------
@@ -193,6 +196,106 @@ class BatteryStore(val db: AndroidSqlDb, private val retentionSql: String) {
         }
     }
 
+    // ---------------- Lernmodell (charge_model) ----------------
+    fun loadModel(): ChargeModel {
+        val m = ChargeModel()
+        raw.rawQuery("SELECT kind, pct, value, n FROM charge_model", null).use {
+            while (it.moveToNext()) {
+                val kind = it.getInt(0); val p = it.getInt(1)
+                if (p !in 0..99) continue
+                if (kind == 0) { m.energy[p] = it.getDouble(2); m.energyN[p] = it.getInt(3) }
+                else if (kind in 1..3) { m.shape[kind][p] = it.getDouble(2); m.shapeN[kind][p] = it.getInt(3) }
+            }
+        }
+        m.sessions = kv("sys.model.sessions")?.toIntOrNull() ?: 0
+        m.bias = kv("sys.model.bias")?.toDoubleOrNull() ?: 0.0
+        m.biasN = kv("sys.model.biasN")?.toIntOrNull() ?: 0
+        return m
+    }
+
+    fun saveModel(m: ChargeModel) = db.transaction {
+        raw.execSQL("DELETE FROM charge_model")
+        raw.compileStatement("INSERT INTO charge_model (kind, pct, value, n) VALUES (?,?,?,?)").use { st ->
+            fun put(kind: Int, p: Int, v: Double, n: Int) {
+                if (n <= 0) return
+                st.clearBindings(); st.bindLong(1, kind.toLong()); st.bindLong(2, p.toLong()); st.bindDouble(3, v); st.bindLong(4, n.toLong())
+                st.executeInsert()
+            }
+            for (p in 0 until 100) {
+                put(0, p, m.energy[p], m.energyN[p])
+                for (k in 1..3) put(k, p, m.shape[k][p], m.shapeN[k][p])
+            }
+        }
+        putKv("sys.model.sessions", m.sessions.toString())
+        putKv("sys.model.bias", m.bias.toString())
+        putKv("sys.model.biasN", m.biasN.toString())
+    }
+
+    /**
+     * Prozentschritte früherer Ladevorgänge aus session_point (für das einmalige Nachlernen nach dem Update).
+     * Liefert je abgeschlossenem Ladevorgang (älteste zuerst) Klasse und Schritte.
+     */
+    fun historicSteps(): List<Pair<Int, List<ChargeModel.Step>>> {
+        val sessions = raw.rawQuery(
+            "SELECT id, klass FROM charge_session WHERE end_ts IS NOT NULL AND end_reason = 0 ORDER BY start_ts", null
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0) to c.getInt(1)) } }
+        return sessions.map { (id, klass) ->
+            val pts = raw.rawQuery(
+                "SELECT t_off_s, level_pm, current_raw, voltage_raw, power_raw FROM session_point WHERE session = ? ORDER BY t_off_s",
+                arrayOf(id.toString())
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        val prod = when {
+                            !c.isNull(4) -> c.getDouble(4)
+                            !c.isNull(2) && !c.isNull(3) -> c.getDouble(2) * c.getDouble(3)
+                            else -> null
+                        }
+                        add(Triple(c.getLong(0), c.getInt(1) / 10, prod))
+                    }
+                }
+            }
+            val steps = mutableListOf<ChargeModel.Step>()
+            var last: Triple<Long, Int, Double?>? = null
+            var firstLevel = true // erster Stand ist meist nur teilweise geladen → nicht lernen
+            for (p in pts) {
+                val l = last
+                if (l != null && p.second > l.second && firstLevel) firstLevel = false
+                else if (l != null && p.second > l.second && l.third != null && p.third != null) {
+                    val dp = p.second - l.second
+                    val dt = (p.first - l.first).toDouble()
+                    val e = (l.third!! + p.third!!) / 2 * dt / dp
+                    if (dp <= 3) for (q in l.second until p.second) steps += ChargeModel.Step(q, dt / dp, e)
+                }
+                if (l == null || p.second != l.second) last = p
+            }
+            klass to steps
+        }
+    }
+
+    // ---------------- Akku-Gesundheit (health_point) ----------------
+    fun addHealthPoint(tsUtc: Long, capacityMah: Double, designMah: Double?, cycles: Int?, windowPm: Int) {
+        raw.execSQL(
+            "INSERT OR REPLACE INTO health_point (ts_utc, capacity_mah, design_mah, cycles, window_pm, method) VALUES (?,?,?,?,?,0)",
+            arrayOf(tsUtc, capacityMah, designMah, cycles, windowPm)
+        )
+    }
+
+    /**
+     * Für frühere Ladevorgänge die Kapazität aus den Rohdaten (CHARGE_COUNTER in sample, 30 Tage) nachtragen.
+     * Liefert (Zeitpunkt, ΔCounter roh, ΔLadestand Promille).
+     */
+    fun historicCapacityWindows(): List<Triple<Long, Long, Int>> = raw.rawQuery(
+        "SELECT cs.end_ts, " +
+            "(SELECT counter_raw FROM sample WHERE ts_utc BETWEEN cs.start_ts AND cs.end_ts AND counter_raw > 0 ORDER BY ts_utc DESC LIMIT 1) - " +
+            "(SELECT counter_raw FROM sample WHERE ts_utc BETWEEN cs.start_ts AND cs.end_ts AND counter_raw > 0 ORDER BY ts_utc LIMIT 1), " +
+            "(SELECT level_pm FROM sample WHERE ts_utc BETWEEN cs.start_ts AND cs.end_ts AND counter_raw > 0 ORDER BY ts_utc DESC LIMIT 1) - " +
+            "(SELECT level_pm FROM sample WHERE ts_utc BETWEEN cs.start_ts AND cs.end_ts AND counter_raw > 0 ORDER BY ts_utc LIMIT 1) " +
+            "FROM charge_session cs WHERE cs.end_ts IS NOT NULL ORDER BY cs.start_ts", null
+    ).use { c ->
+        buildList { while (c.moveToNext()) if (!c.isNull(1) && !c.isNull(2)) add(Triple(c.getLong(0), c.getLong(1), c.getInt(2))) }
+    }
+
     // ---------------- Wartung ----------------
     /** Höchstens 1× in 24 h und nur beim Laden aufrufen. */
     fun maintenanceIfDue(nowUtc: Long): Boolean {
@@ -204,6 +307,9 @@ class BatteryStore(val db: AndroidSqlDb, private val retentionSql: String) {
     }
 
     fun clearHistory() = db.transaction {
-        for (t in listOf("sample", "span", "charge_session", "session_point", "charge_profile", "day_stat")) raw.execSQL("DELETE FROM $t")
+        for (t in listOf("sample", "span", "charge_session", "session_point", "charge_profile", "day_stat", "charge_model", "health_point")) {
+            raw.execSQL("DELETE FROM $t")
+        }
+        raw.execSQL("DELETE FROM kv WHERE key LIKE 'sys.model.%'")
     }
 }

@@ -21,6 +21,8 @@ data class LiveState(
     val etaTargetS: Long?,
     val etaFullS: Long?,
     val etaConf: Double,
+    /** > 0: Restzeit aus dem Lernmodell (Anzahl gelernter Ladevorgänge). */
+    val etaLearned: Int = 0,
     val estimated: Boolean,
     val targetPct: Int,
     val alarm: Boolean,
@@ -35,6 +37,7 @@ data class LiveState(
     val serviceRunning: Boolean,
     val summary: String? = null,
     val liveChip: Boolean = false,
+    val statusIcon: Boolean = false,
     val deviceLimitPct: Int? = null,
 ) {
     val pct: Int get() = levelPm / 10
@@ -54,7 +57,7 @@ data class LiveState(
         putString("etaState", etaState.name.lowercase())
         etaTargetS?.let { putLong("etaTargetS", it) }
         etaFullS?.let { putLong("etaFullS", it) }
-        putDouble("etaConf", etaConf); putBoolean("estimated", estimated)
+        putDouble("etaConf", etaConf); putInt("etaLearned", etaLearned); putBoolean("estimated", estimated)
         putInt("targetPct", targetPct); putBoolean("alarm", alarm); putBoolean("alarmMuted", alarmMuted)
         sessionStartUtc?.let { putLong("sessionStartUtc", it) }
         sessionStartPct?.let { putInt("sessionStartPct", it) }

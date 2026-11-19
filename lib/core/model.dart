@@ -32,9 +32,13 @@ class Live {
     this.serviceRunning = false,
     this.profileSource = 0,
     this.deviceLimitPct,
+    this.etaLearned = 0,
   });
 
   final int levelPm, status, plug, health, targetPct, profileSource;
+
+  /// > 0: Restzeit aus dem Lernmodell, gelernt aus so vielen Ladevorgängen.
+  final int etaLearned;
 
   /// Erkanntes Ladelimit des Geräts (z. B. Ladeschutz 90 %), null = unbekannt.
   final int? deviceLimitPct;
@@ -73,6 +77,7 @@ class Live {
         serviceRunning: (m['serviceRunning'] as bool?) ?? false,
         profileSource: _i(m['profileSource']) ?? 0,
         deviceLimitPct: _i(m['deviceLimitPct']),
+        etaLearned: _i(m['etaLearned']) ?? 0,
       );
 }
 
@@ -86,6 +91,7 @@ class AppState {
     this.summary = true,
     this.onboarded = false,
     this.liveChip = false,
+    this.statusIcon = false,
     this.dbPath,
     this.iToMa = 0.001,
     this.sign = 1,
@@ -110,6 +116,9 @@ class AppState {
 
   /// Android 16+: Watt dauerhaft als Chip in der Statusleiste (sonst nur Symbol).
   final bool liveChip;
+
+  /// Symbol der Lade-Benachrichtigung in der Statusleiste (aus = nur beim Herunterziehen sichtbar).
+  final bool statusIcon;
   final String? dbPath;
   final double iToMa;
 
@@ -121,6 +130,7 @@ class AppState {
         summary: (m['summary'] as bool?) ?? true,
         onboarded: (m['onboarded'] as bool?) ?? false,
         liveChip: (m['liveChip'] as bool?) ?? false,
+        statusIcon: (m['statusIcon'] as bool?) ?? false,
         dbPath: m['dbPath'] as String?,
         iToMa: _d(m['iToMa']) ?? 0.001,
         sign: _i(m['sign']) ?? 1,
@@ -137,14 +147,19 @@ class AppState {
 }
 
 class SystemStatus {
-  const SystemStatus({this.notificationsEnabled = true, this.ignoringBatteryOptimizations = false, this.manufacturer = ''});
+  const SystemStatus(
+      {this.notificationsEnabled = true, this.ignoringBatteryOptimizations = false, this.manufacturer = '', this.monitorChannelOff = false});
   final bool notificationsEnabled, ignoringBatteryOptimizations;
+
+  /// Kanal „Hintergrunddienst“ in Android ausgeschaltet (Dienst läuft weiter, aber ohne Symbol oben).
+  final bool monitorChannelOff;
   final String manufacturer;
 
   factory SystemStatus.fromMap(Map<Object?, Object?> m) => SystemStatus(
         notificationsEnabled: (m['notificationsEnabled'] as bool?) ?? true,
         ignoringBatteryOptimizations: (m['ignoringBatteryOptimizations'] as bool?) ?? false,
         manufacturer: (m['manufacturer'] as String?) ?? '',
+        monitorChannelOff: (m['monitorChannelOff'] as bool?) ?? false,
       );
 }
 
@@ -232,16 +247,86 @@ class DrainStats {
   bool get isEmpty => onPctPerH == null && offPctPerH == null && avgPctPerH == null;
 }
 
+/// Eine Kapazitätsmessung (health_point).
+class HealthPoint {
+  const HealthPoint(this.ts, this.capacityMah, {this.designMah, this.cycles});
+  final int ts;
+  final double capacityMah;
+  final double? designMah;
+  final int? cycles;
+}
+
+/// Trend der Akku-Gesundheit: robuste Gerade (Theil-Sen) durch die Kapazitätsmessungen.
+class HealthTrend {
+  const HealthTrend({required this.nowMah, this.designMah, this.slopeMahPerDay, this.reach80Ts, this.days = 0, this.n = 0});
+  final double nowMah;
+  final double? designMah;
+
+  /// mAh pro Tag (negativ = Verlust); null = zu wenige Daten für eine Prognose.
+  final double? slopeMahPerDay;
+
+  /// Voraussichtlicher Zeitpunkt, an dem 80 % der Nennkapazität erreicht sind.
+  final int? reach80Ts;
+  final int days, n;
+
+  double? get healthPct => designMah == null || designMah! <= 0 ? null : nowMah / designMah! * 100;
+
+  /// Verlust in Prozentpunkten von [ref] pro Monat.
+  double? lossPctPerMonth(double ref) => slopeMahPerDay == null ? null : -slopeMahPerDay! * 30.44 / ref * 100;
+
+  static const _day = 86400000;
+
+  /// null, wenn es keine Messung gibt. Prognose erst ab 4 Messungen über ≥ 14 Tage.
+  static HealthTrend? of(List<HealthPoint> pts) {
+    if (pts.isEmpty) return null;
+    final sorted = [...pts]..sort((a, b) => a.ts.compareTo(b.ts));
+    final design = sorted.reversed.map((p) => p.designMah).whereType<double>().firstOrNull;
+    final days = ((sorted.last.ts - sorted.first.ts) / _day).round();
+    // Aktueller Wert: Median der letzten bis zu 5 Messungen (eine einzelne Messung schwankt ±2 %).
+    final recent = sorted.sublist(sorted.length > 5 ? sorted.length - 5 : 0).map((p) => p.capacityMah).toList()..sort();
+    final median = recent[recent.length ~/ 2];
+    if (sorted.length < 4 || days < 14) {
+      return HealthTrend(nowMah: median, designMah: design, days: days, n: sorted.length);
+    }
+    final slopes = <double>[];
+    for (var i = 0; i < sorted.length; i++) {
+      for (var j = i + 1; j < sorted.length; j++) {
+        final dt = (sorted[j].ts - sorted[i].ts) / _day;
+        if (dt >= 1) slopes.add((sorted[j].capacityMah - sorted[i].capacityMah) / dt);
+      }
+    }
+    if (slopes.isEmpty) return HealthTrend(nowMah: median, designMah: design, days: days, n: sorted.length);
+    slopes.sort();
+    final slope = slopes[slopes.length ~/ 2];
+    final now = (sorted.map((p) => p.capacityMah - slope * (p.ts - sorted.last.ts) / _day).toList()..sort())[sorted.length ~/ 2];
+    int? reach;
+    final ref = design ?? sorted.first.capacityMah;
+    if (slope < 0 && now > 0.8 * ref) {
+      final d = (0.8 * ref - now) / slope;
+      if (d < 20 * 365) reach = sorted.last.ts + (d * _day).round();
+    }
+    return HealthTrend(nowMah: now, designMah: design, slopeMahPerDay: slope, reach80Ts: reach, days: days, n: sorted.length);
+  }
+}
+
 class History {
   const History({
     required this.from,
     required this.to,
+    int? levelFrom,
     this.levels = const [],
     this.coverage = const [],
     this.sessions = const [],
     this.drain = const DrainStats(),
-  });
+    this.health = const [],
+  }) : levelFrom = levelFrom ?? from;
+
+  /// Fenster für Ladevorgänge und Verbrauch (24 Std. / 7 Tage).
   final int from, to;
+
+  /// Ab hier sind Verlaufsdaten geladen (zum Zurückscrollen im Akkustand-Graphen).
+  final int levelFrom;
+  final List<HealthPoint> health;
   final List<LevelPoint> levels;
   final List<Coverage> coverage;
   final List<ChargeSessionInfo> sessions;

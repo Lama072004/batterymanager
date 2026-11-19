@@ -37,6 +37,7 @@ class MonitorProvider : ContentProvider() {
                     summary = e.getBoolean("summary", old.summary),
                     onboarded = e.getBoolean("onboarded", old.onboarded),
                     liveChip = e.getBoolean("liveChip", old.liveChip),
+                    statusIcon = e.getBoolean("statusIcon", old.statusIcon),
                 )
                 rt.putSettings(s)
                 if (s.mode != old.mode) {
@@ -84,7 +85,7 @@ class MonitorProvider : ContentProvider() {
         return Bundle().apply {
             putInt("v", 1)
             putInt("targetPct", s.targetPct); putBoolean("alarm", s.alarm); putInt("mode", s.mode)
-            putInt("heatWarnDc", s.heatWarnDc); putBoolean("summary", s.summary); putBoolean("onboarded", s.onboarded); putBoolean("liveChip", s.liveChip)
+            putInt("heatWarnDc", s.heatWarnDc); putBoolean("summary", s.summary); putBoolean("onboarded", s.onboarded); putBoolean("liveChip", s.liveChip); putBoolean("statusIcon", s.statusIcon)
             putString("dbPath", context!!.getDatabasePath(AndroidSqlDb.DB_NAME).path)
             putDouble("iToMa", p.iToMa); putInt("sign", p.sign); putInt("cells", p.cells)
             putInt("profileSource", p.source); putInt("profileRev", p.rev)

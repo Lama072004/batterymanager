@@ -70,6 +70,23 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: (v) => c.putSettings({'summary': v}),
               ),
               SwitchListTile(
+                title: const Text('Symbol in der Statusleiste'),
+                subtitle: const Text('Aus: Beim Einstecken kurz das Banner, danach kein Symbol oben. '
+                    'Watt und Restzeit siehst du beim Herunterziehen der Benachrichtigungen.'),
+                value: s.statusIcon || s.liveChip,
+                onChanged: s.liveChip ? null : (v) => c.putSettings({'statusIcon': v}),
+              ),
+              if (!s.statusIcon && !s.liveChip && !c.status.monitorChannelOff)
+                ListTile(
+                  leading: Icon(Icons.visibility_off_outlined, color: cs.primary),
+                  title: const Text('Dauer-Symbol oben ausblenden'),
+                  subtitle: const Text('Android zeigt für den Hintergrunddienst immer ein Symbol. '
+                      'Schalte dort „Hintergrunddienst“ aus – die Messung läuft weiter, die Lade-Info bleibt beim Herunterziehen sichtbar.'),
+                  isThreeLine: true,
+                  trailing: const Icon(Icons.open_in_new),
+                  onTap: c.backend.openMonitorChannelSettings,
+                ),
+              SwitchListTile(
                 title: const Text('Watt in der Statusleiste'),
                 subtitle: const Text('Ab Android 16: Ladeleistung dauerhaft oben neben der Uhr. '
                     'Aus: oben nur das Symbol – Watt und Restzeit beim Herunterziehen der Benachrichtigung.'),
